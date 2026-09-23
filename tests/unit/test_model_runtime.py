@@ -90,6 +90,22 @@ def test_nli_label_order_and_bounded_batches():
     assert [rows for rows, _ in instance._sessions["context"].shapes] == [8, 8, 1]
 
 
+def test_short_and_long_ner_use_same_tokens_and_entities_with_separate_sessions():
+    instance = fake_runtime()
+    short = FakeSession(instance._tokenizers["ner"])
+    instance._sessions["ner_short"] = short
+    name = "Александр Сергеевич Пушкин"
+    result = instance.ner(name)
+    assert [(e.start, e.end, e.label) for e in result] == [(0, len(name), "PER")]
+    assert short.shapes == [(1, 5)]
+    assert instance._sessions["ner"].shapes == []
+    long = "текст " * 300 + name
+    result = instance.ner(long)
+    assert [(e.start, e.end, e.label) for e in result] == [(long.index(name), len(long), "PER")]
+    assert short.shapes == [(1, 5)]
+    assert instance._sessions["ner"].shapes
+
+
 def test_nli_rejects_overlong_text_without_silent_truncation():
     instance = fake_runtime()
     with pytest.raises(runtime.ModelUnavailable, match="^Local semantic model is unavailable\\.$"):
@@ -219,6 +235,9 @@ def real_runtime():
 
 def test_real_model_cpu_provider_and_nli_sanity(real_runtime):
     assert all(session.get_providers() == ["CPUExecutionProvider"] for session in real_runtime._sessions.values())
+    if runtime._ner_threads() > 1:
+        assert real_runtime._sessions["ner_short"].get_session_options().intra_op_num_threads == 1
+        assert real_runtime._sessions["ner"].get_session_options().intra_op_num_threads == runtime._ner_threads()
     scores = real_runtime.nli([("A man is eating food.", "A man is eating food."),
                               ("A man is eating food.", "Nobody is eating.")])
     assert scores[0][0] > .8

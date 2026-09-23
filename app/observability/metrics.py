@@ -63,7 +63,7 @@ class Metrics:
         self._counters: dict[tuple[str, ...], int] = defaultdict(int)
         self._histograms: dict[tuple[str, ...], _Histogram] = defaultdict(_Histogram)
         self._traffic_started_at = time.monotonic()
-        self._traffic: deque[tuple[int, int, int]] = deque()
+        self._traffic: deque[tuple[int, dict[tuple[str, str], tuple[int, int]]]] = deque()
         # Exact per-inference events are retained for only the rolling window.
         # This avoids re-tokenizing and keeps model TPS independent of request TPS.
         self._model_traffic: dict[str, deque[tuple[float, int]]] = {
@@ -100,18 +100,22 @@ class Metrics:
         Tokens use ``ceil(characters / 4)``. This is intentionally an estimate:
         it does not invoke a tokenizer or rerun detection.
         """
+        if operation not in _ALLOWED_LABEL_VALUES["operation"] or status not in _ALLOWED_LABEL_VALUES["status"]:
+            raise ValueError("unknown request operation or status")
         token_count = max(0, (max(0, text_characters) + 3) // 4)
         now = time.monotonic()
         self.inc("pii_requests_total", operation=operation, status=status)
         self.add("pii_input_tokens_estimated_total", token_count, operation=operation)
         self.observe("pii_request_duration_seconds", max(0.0, elapsed_seconds), operation=operation)
+        self.observe("pii_request_outcome_duration_seconds", max(0.0, elapsed_seconds),
+                     operation=operation, status=status)
         with self._lock:
             second = int(now)
-            if self._traffic and self._traffic[-1][0] == second:
-                _, requests, tokens = self._traffic[-1]
-                self._traffic[-1] = (second, requests + 1, tokens + token_count)
-            else:
-                self._traffic.append((second, 1, token_count))
+            if not self._traffic or self._traffic[-1][0] != second:
+                self._traffic.append((second, {}))
+            bucket = self._traffic[-1][1]
+            requests, tokens = bucket.get((operation, status), (0, 0))
+            bucket[operation, status] = (requests + 1, tokens + token_count)
             self._prune_traffic(second)
 
     def traffic_snapshot(self, window_seconds: float = _TRAFFIC_WINDOW_SECONDS) -> dict:
@@ -123,20 +127,43 @@ class Metrics:
             raise ValueError("traffic window exceeds retained worker-local window")
         with self._lock:
             window_start = max(self._traffic_started_at, now - window_seconds)
-            buckets = [bucket for bucket in self._traffic if bucket[0] >= int(window_start)]
+            counts: dict[tuple[str, str], int] = defaultdict(int)
+            tokens = 0
+            for second, bucket in self._traffic:
+                if second >= int(window_start):
+                    for key, (requests, input_tokens) in bucket.items():
+                        counts[key] += requests
+                        tokens += input_tokens
         elapsed = now - window_start
-        request_count = sum(requests for _, requests, _ in buckets)
-        tokens = sum(tokens for _, _, tokens in buckets)
+
+        def rates(operation: str | None = None) -> dict:
+            by_status = {status: sum(count for (op, outcome), count in counts.items()
+                                    if outcome == status and (operation is None or op == operation))
+                         for status in ("success", "overload", "error")}
+            total = sum(by_status.values())
+            return {
+                "request_count": total,
+                "request_rate_per_second": total / elapsed if elapsed else 0.0,
+                "successful_requests_per_second": by_status["success"] / elapsed if elapsed else 0.0,
+                "success_fraction": by_status["success"] / total if total else None,
+                "by_status": {status: {"request_count": count,
+                                       "request_rate_per_second": count / elapsed if elapsed else 0.0}
+                              for status, count in by_status.items()},
+            }
+
         return {
             "scope": "worker_local_in_process",
             "window_seconds_requested": window_seconds,
             "window_seconds_elapsed": elapsed,
             "bucket_resolution_seconds": 1,
-            "request_count": request_count,
-            "request_rate_per_second": request_count / elapsed if elapsed else 0.0,
+            **rates(),
+            "by_operation": {operation: rates(operation)
+                             for operation in sorted(_ALLOWED_LABEL_VALUES["operation"])},
+            "rate_definition": "Completed responses include success, overload and errors; success means HTTP processing succeeded, not independently verified accuracy",
             "input_tokens_estimated": tokens,
             "input_tokens_estimated_per_second": tokens / elapsed if elapsed else 0.0,
             "input_token_method": "estimated_ceil_characters_div_4",
+            "input_token_scope": "All completed requests including rejected inputs; not model-processed tokens",
             "token_count_unit": "estimated_input_tokens",
         }
 

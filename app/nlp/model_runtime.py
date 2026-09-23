@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from app.observability.telemetry import record_model_tokens
+from app.observability.telemetry import record_model_tokens, model_inference
 from app.security.limits import BackpressureError
 
 
@@ -52,8 +52,8 @@ def _ner_threads() -> int:
     """Return configured NER intra-op threads, bounded by available CPUs.
 
     ``PII_NER_THREADS`` accepts 1..32. The default is four threads, capped on
-    smaller hosts. Context/NLI intentionally remains single-threaded so short
-    request throughput is not traded for one large NER document.
+    smaller hosts. This pool handles long NER inputs; short NER inputs and
+    context/NLI each use a single-threaded session for concurrent throughput.
     """
     raw = os.environ.get("PII_NER_THREADS", "4")
     try:
@@ -142,6 +142,15 @@ class ModelRuntime:
                     sess_options=ner_options if name == "ner" else context_options,
                     providers=["CPUExecutionProvider"],
                 )
+                if name == "ner" and ner_options.intra_op_num_threads > 1:
+                    # The same weights with one inference thread avoid pool
+                    # contention on short concurrent requests. Keep the wider
+                    # pool for long documents that need parallel matrix work.
+                    self._sessions["ner_short"] = ort.InferenceSession(
+                        str(folder / self.manifest["models"][name]["weights"]),
+                        sess_options=context_options,
+                        providers=["CPUExecutionProvider"],
+                    )
             labels = self._configs["context"]["label2id"]
             self._nli_order = [labels[label] for label in ("entailment", "neutral", "contradiction")]
             self._ner_labels = self._configs["ner"]["id2label"]
@@ -165,6 +174,8 @@ class ModelRuntime:
         if not ids:
             return []
         capacity = NER_TOKENS - 2
+        session = (self._sessions.get("ner_short", self._sessions["ner"])
+                   if len(ids) <= capacity else self._sessions["ner"])
         cls_id, sep_id = tokenizer.token_to_id("[CLS]"), tokenizer.token_to_id("[SEP]")
         if cls_id is None or sep_id is None:
             raise ModelUnavailable()
@@ -180,7 +191,8 @@ class ModelRuntime:
         for batch_start in range(0, len(windows), BATCH_SIZE):
             batch = windows[batch_start:batch_start + BATCH_SIZE]
             rows = [([cls_id, *ids[start:stop], sep_id], [0] * (stop - start + 2)) for start, stop in batch]
-            logits = _run(self._sessions["ner"], rows, self._configs["ner"]["pad_token_id"])
+            with model_inference("ner"):
+                logits = _run(session, rows, self._configs["ner"]["pad_token_id"])
             record_model_tokens("ner", sum(len(row[0]) for row in rows))
             probabilities = _softmax(logits)
             if probabilities.shape[:2] != (len(rows), max(len(row[0]) for row in rows)):
@@ -238,7 +250,8 @@ class ModelRuntime:
                 encoded = [tokenizer.encode(premise, hypothesis) for premise, hypothesis in pairs[start:start + BATCH_SIZE]]
                 if any(len(row.ids) > NLI_TOKENS for row in encoded):
                     raise ModelUnavailable()
-                logits = _run(self._sessions["context"], [(row.ids, row.type_ids) for row in encoded], self._configs["context"]["pad_token_id"])
+                with model_inference("context"):
+                    logits = _run(self._sessions["context"], [(row.ids, row.type_ids) for row in encoded], self._configs["context"]["pad_token_id"])
                 record_model_tokens("context", sum(len(row.ids) for row in encoded))
                 probabilities = _softmax(logits)
                 if probabilities.shape != (len(encoded), 3):

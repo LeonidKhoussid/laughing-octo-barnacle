@@ -92,3 +92,8 @@ def test_actual_model_token_counts_match_feed_masks_include_overlap_and_skip_fai
         key: value for key, value in metrics.snapshot()["counters"].items()
         if key.startswith("pii_model_input_tokens_total/")
     } == model_counters
+    durations = metrics.snapshot()["histograms"]
+    # One NER batch succeeds, a second fails; both consume worker time.
+    assert durations["pii_model_inference_duration_seconds/model=ner"]["count"] == 2
+    assert durations["pii_model_inference_duration_seconds/model=context"]["count"] == 2
+    assert "synthetic inference failure" not in str(metrics.snapshot())

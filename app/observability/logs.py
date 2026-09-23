@@ -6,8 +6,11 @@ from __future__ import annotations
 
 import json
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 import sys
 import uuid
+from datetime import datetime, timezone
 
 _ALLOWED_FIELDS = {
     "request_id",
@@ -43,9 +46,23 @@ _RESULTS = frozenset({"success", "error", "overload"})
 class SafeLogger:
     """Logs only allowlisted fields."""
 
-    def __init__(self, name: str = "alfagen") -> None:
+    def __init__(self, name: str = "alfagen", *, log_file: str | None = None) -> None:
         self._logger = logging.getLogger(name)
         self._logger.setLevel(logging.INFO)
+        if log_file:
+            path = str(Path(log_file).resolve())
+            # One process owns this rotating file. Give each worker its own
+            # path if deploying multiple workers; never share rotation handles.
+            if not any(isinstance(h, RotatingFileHandler) and h.baseFilename == path
+                       for h in self._logger.handlers):
+                handler = RotatingFileHandler(path, maxBytes=100 * 1024 * 1024,
+                                              backupCount=5, encoding="utf-8")
+                handler.setFormatter(logging.Formatter("%(message)s"))
+                for previous in self._logger.handlers[:]:
+                    self._logger.removeHandler(previous)
+                    previous.close()
+                self._logger.addHandler(handler)
+            self._logger.propagate = False
         # Uvicorn configures its own loggers, not the application logger.
         # Emit structured events even when the root logger has no handler.
         if not self._logger.hasHandlers():
@@ -73,7 +90,8 @@ class SafeLogger:
             }
         elif counts is not None:
             safe.pop("detected_counts", None)
-        record = {"message": message if message in _ALLOWED_MESSAGES else "processing event", **safe}
+        record = {"timestamp": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                  "message": message if message in _ALLOWED_MESSAGES else "processing event", **safe}
         self._logger.log(level, json.dumps(record, ensure_ascii=False))
 
     def info(self, message: str, **fields: object) -> None:

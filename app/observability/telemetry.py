@@ -8,6 +8,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+import time
 from typing import Iterator
 
 from app.observability.logs import SafeLogger
@@ -99,3 +100,15 @@ def record_model_tokens(model: str, count: int) -> None:
     ctx = _context.get()
     if ctx is not None:
         ctx.metrics.record_model_tokens(model, count)
+
+
+@contextmanager
+def model_inference(model: str) -> Iterator[None]:
+    """Time native model batches, including failures, without logging inputs."""
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        ctx = _context.get()
+        if ctx is not None:
+            ctx.metrics.observe("pii_model_inference_duration_seconds", time.monotonic() - started, model=model)

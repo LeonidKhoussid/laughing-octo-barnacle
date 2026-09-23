@@ -59,6 +59,43 @@ New `/process` overload events include an allowlisted `overload_reason`:
 and credentials remain excluded. Do not treat a large total request count
 including 429s as successful throughput.
 
+### Journald drops and misleading total RPS
+
+For the single-worker systemd installation, preserve the structured processing
+audit in rotating files and disable the duplicate Uvicorn access line. Add these
+to the existing service override after deploying the corresponding source:
+
+```ini
+[Service]
+LogsDirectory=alfagen-pii-gateway
+LogsDirectoryMode=0750
+UMask=0077
+Environment=PII_LOG_FILE=/var/log/alfagen-pii-gateway/gateway.log
+Environment=UVICORN_ACCESS_LOG=false
+```
+
+Run `systemctl daemon-reload` and restart the unit. The parent log directory is
+created by systemd for the service user. Startup errors remain in journald;
+per-request processing stages, detected category counts and final outcomes go
+to `gateway.log`, with UTC timestamps, 100 MiB rotation and five backups. Events
+are not sampled. Do not disable journald rate protection globally. If the
+existing `ExecStart` explicitly enables access logging, replace that flag with
+`--no-access-log`: CLI arguments take precedence over Uvicorn environment values.
+Inspect the file with `sudo tail -n 50 /var/log/alfagen-pii-gateway/gateway.log`.
+File logging requires a writable path; a configuration error fails startup.
+For multiple workers, use `gateway-{pid}.log` and arrange cleanup of old worker
+files; Python's rotating handler cannot safely share one file across processes.
+The default without `PII_LOG_FILE` still logs to standard output.
+
+After this update, `/metrics` exposes
+`traffic.by_operation.process.successful_requests_per_second`, `success_fraction`
+and `by_status` counts/rates for the same rolling window. Total RPS explicitly
+includes rejected requests. `pii_request_outcome_duration_seconds` separates
+success latency from quick rejections; `pii_model_inference_duration_seconds`
+separates NER and context native batch timings (including failed batches, excluding
+tokenization and admission waiting). These are worker-local measurements. HTTP
+success is not proof of correct masking; use the independent benchmark oracle too.
+
 ## Copy source and start the judge endpoint
 
 From the workstation that has the updated source archive, copy it to the server:
@@ -88,7 +125,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-This basic configuration needs neither `.env` nor API keys. It starts one MemoryVault worker with four NER CPU threads and exposes the no-key competition endpoint at `POST /process`; protected demo consumers remain unavailable until their keys are configured. This is the appropriate initial configuration for the 4-CPU, 8-GB judge server because MemoryVault cannot be shared by multiple workers.
+This basic configuration needs neither `.env` nor API keys. It starts one MemoryVault worker with one NER thread for short texts and up to four for long texts and exposes the no-key competition endpoint at `POST /process`; protected demo consumers remain unavailable until their keys are configured. This is the appropriate initial configuration for the 4-CPU, 8-GB judge server because MemoryVault cannot be shared by multiple workers.
 
 The image uses CPU Linux wheels, builds the React UI with `npm ci`, and downloads SHA-256-verified semantic models into a separate cached build stage. The model download is about 1.16 GB, so allow outbound access and enough disk space for the image and model layer. App-code-only changes reuse the cached model stage unless `configs/semantic-models.json` or `scripts/download_semantic_models.py` changes.
 

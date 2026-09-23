@@ -1,5 +1,7 @@
 # Latest overload-isolation repair
 
+Latest follow-up: [repeated score, short/long NER routing, successful rates and log retention](score-followup.md). This adds measured improvements without claiming the 1,000 successful RPS target.
+
 See [overload-repair.md](overload-repair.md) for the current change and new
 before/after measurements. The repaired four-CPU container reached 67.06 correct
 RPS in a five-minute diagnostic at 330 scheduled RPS, with remaining 429 and

@@ -161,7 +161,9 @@ def create_app(
         vault, engine, fp, policy_store.policy_version, retention_seconds=retention
     )
 
-    logger = SafeLogger()
+    log_file = os.environ.get("PII_LOG_FILE", "").strip()
+    # RotatingFileHandler is process-local; distinct worker files avoid races.
+    logger = SafeLogger(log_file=log_file.replace("{pid}", str(os.getpid())) if log_file else None)
     metrics = Metrics()
     processing_seconds = float(os.environ.get("PII_MAX_PROCESSING_SECONDS", "9"))
     if not math.isfinite(processing_seconds) or not 0 < processing_seconds < 10:
