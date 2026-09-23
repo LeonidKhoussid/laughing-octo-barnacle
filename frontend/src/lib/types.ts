@@ -18,6 +18,26 @@ export interface MaskResponse {
   egress_disabled: boolean;
 }
 
+export interface DecisionInfo {
+  category: string;
+  decision: "MASK" | "KEEP" | "UNCERTAIN";
+  rule_id: string;
+  detector_id: string;
+  evidence_spans: { start: number; end: number }[];
+  sensitive_spans: { start: number; end: number }[];
+  signals: string[];
+}
+
+export interface ContextCheckResponse {
+  text: string;
+  masked_text: string;
+  restored: string;
+  exact_round_trip: boolean;
+  spans: { start: number; end: number; category: string }[];
+  decisions: DecisionInfo[];
+  policy_version: string;
+}
+
 export interface UnmaskResponse {
   original_text: string;
   policy_version: string;

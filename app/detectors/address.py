@@ -10,7 +10,7 @@ from app.detectors.base import Detector
 # Address context markers.
 _ADDRESS_CONTEXT = re.compile(
     r"(?i)(адрес|адреса|адресу|адресом|проживает|проживающ|зарегистрирован|"
-    r"зарегистрирована|место\s+жительства|место\s+проживания)"
+    r"зарегистрирована|место\s+жительства|место\s+проживания|\bиз\s+дома\b)"
 )
 
 # Office/organization context that should NOT trigger personal-address masking.
@@ -28,7 +28,7 @@ _OFFICE_CONTEXT = re.compile(
 _PERSONAL_ADDRESS_CONTEXT = re.compile(
     r"(?i)(адрес\s+клиента|адрес\s+проживания|адрес\s+регистрации|"
     r"проживает|проживающ|зарегистрирован|зарегистрирована|"
-    r"место\s+жительства|место\s+проживания)"
+    r"место\s+жительства|место\s+проживания|домашний\s+адрес|\bиз\s+дома\b)"
 )
 
 # City: "г. Москва" or "город Москва" or compact "г.Москва". Multiword cities
@@ -36,10 +36,10 @@ _PERSONAL_ADDRESS_CONTEXT = re.compile(
 _CITY = re.compile(
     r"(?i)(?:г\.|город)\s*([А-ЯЁ][а-яё\-]+(?:\s+[А-ЯЁ][а-яё\-]+)?)"
 )
-# Street: "ул. Тверская" or "улица Тверская" or compact "ул.Тверская".
+# Street or alley, including compact "ул.Тверская" and "пер.Тихий".
 # Handles numeric street names like "8 Марта".
 _STREET = re.compile(
-    r"(?i)(?:ул\.|улица)\s*([А-ЯЁ0-9][а-яё0-9\-]*(?:\s+[А-ЯЁ0-9][а-яё0-9\-]+)?)"
+    r"(?i)(?:ул\.|улица|пер\.|переулок)\s*([А-ЯЁ0-9][а-яё0-9\-]*(?:\s+[А-ЯЁ0-9][а-яё0-9\-]+)?)"
 )
 # House: "д. 15" or "дом 15" or "д. 15к2" or compact "д.15".
 _HOUSE = re.compile(r"(?i)(?:д\.|дом)\s*(\d+[а-яё]?(?:[\/\-]\d+[а-яё]?)?)")
@@ -66,7 +66,7 @@ _POSTCODE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 class AddressDetector(Detector):
     detector_id = "address"
-    detector_version = "1.0.0"
+    detector_version = "1.1.0"
 
     def detect(self, text: str) -> list[Detection]:
         out: list[Detection] = []

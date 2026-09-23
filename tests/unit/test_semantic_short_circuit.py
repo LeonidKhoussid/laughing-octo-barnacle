@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.detectors.semantic import SemanticDetector
+from app.detectors.semantic import SemanticDetector, _PRIVATE_HYPOTHESIS
 from app.nlp.model_runtime import ModelUnavailable
 
 
@@ -13,7 +13,7 @@ def detector(outputs):
     calls = []
     def nli(pairs):
         calls.append(pairs)
-        return [outputs[pair] for pair in pairs]
+        return [outputs.get(pair, (.01, .98, .01)) if pair[1] == _PRIVATE_HYPOTHESIS else outputs[pair] for pair in pairs]
     instance.runtime = SimpleNamespace(nli=nli)
     return instance, calls
 
@@ -27,6 +27,7 @@ def test_decision_matches_exhaustive_policy(outcomes):
     qualifying = [i for i, (e, n, c) in enumerate(outcomes) if e >= .8 and e - max(n, c) >= .5]
     assert (decision == "public-context") == bool(qualifying)
     assert len(calls) == (qualifying[0] + 1 if qualifying else len(hypotheses))
+    assert calls[0] == [(passage, _PRIVATE_HYPOTHESIS), (passage, hypotheses[0])]
     assert score == (outcomes[qualifying[0]][0] if qualifying else 0.0)
 
 
@@ -35,7 +36,7 @@ def test_shared_passage_is_deduplicated_but_not_cached_across_requests():
     instance, calls = detector({(job[0], "литература"): (.95, .03, .02)})
     first = instance._context_decisions({"a": job, "b": job})
     assert first['a'] == first['b']
-    assert calls == [[(job[0], "литература")]]
+    assert calls == [[(job[0], _PRIVATE_HYPOTHESIS), (job[0], "литература")]]
     instance._context_decisions({"a": job})
     assert len(calls) == 2
 
@@ -58,3 +59,21 @@ def test_required_inference_error_still_fails_closed():
     instance.runtime.nli = fail
     with pytest.raises(ModelUnavailable):
         instance._context_decisions({"a": ("passage", ["hypothesis"])})
+
+
+def test_private_model_evidence_vetoes_qualifying_public_topic():
+    instance, calls = detector({("private art order", _PRIVATE_HYPOTHESIS): (.99, .009, .001),
+                               ("private art order", "literature"): (.95, .03, .02)})
+    result = instance._context_decisions({"person": ("private art order", ["literature", "art"])})
+    assert result == {"person": ("private-model", .99)}
+    assert calls == [[("private art order", _PRIVATE_HYPOTHESIS), ("private art order", "literature")]]
+
+
+def test_private_veto_is_local_to_candidate_passage():
+    instance, calls = detector({("private", _PRIVATE_HYPOTHESIS): (.99, .009, .001),
+                               ("private", "art"): (.95, .03, .02),
+                               ("public", "literature"): (.95, .03, .02)})
+    result = instance._context_decisions({"a": ("private", ["art"]), "b": ("public", ["literature"])})
+    assert result == {"a": ("private-model", .99), "b": ("public-context", .95)}
+    assert calls == [[("private", _PRIVATE_HYPOTHESIS), ("private", "art"),
+                      ("public", _PRIVATE_HYPOTHESIS), ("public", "literature")]]

@@ -4,6 +4,7 @@ import type {
   ChatResponse,
   ConfigResponse,
   ConfigUpdateResponse,
+  ContextCheckResponse,
   MaskResponse,
   RestoreResponseResponse,
   UnmaskResponse,
@@ -68,6 +69,12 @@ function authHeaders(apiKey?: string): Record<string, string> {
 
 export const api = {
   getConfig: () => request<ConfigResponse>("/config"),
+
+  checkContext: (text: string) =>
+    request<ContextCheckResponse>("/trust-lab/action-a", {
+      method: "POST",
+      body: JSON.stringify({ text, consumer: "autocheck", labeled: false, run_variations: false }),
+    }),
 
   mask: (p: MaskParams) =>
     request<MaskResponse>("/demo/mask", {

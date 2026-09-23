@@ -1,5 +1,7 @@
 # Current performance verification
 
+Organizer clarification reviewed after these measurements: [chat review](chat-review-2026-09-23.md), messages #666–667, describes ramped load averaging roughly 330 RPS with peaks of 1000, equal mask/restore counts, and up to 200 connections. HTTP 429 is recorded separately and is not considered an invalid-request error by the organizer. The harness's generic `errors` count includes non-200 responses; use `status_counts` to separate 429 from invalid responses. Neither rejected nor unissued requests count as successful throughput. Exact judge traffic remains unspecified; the fixed-rate mask-heavy runs below remain stress diagnostics, not an exact reproduction of that schedule.
+
 **The 1000 RPS target is not demonstrated.** The tables below labelled G3/G5/G8
 are historical reports from before the local RuBERT and mDeBERTa pipeline was
 enabled. They do not measure the current service and must not be used as its

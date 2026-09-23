@@ -37,9 +37,18 @@ _INSTITUTION = re.compile(r"(?i)\b(?:музе\w*|театр\w*|библиоте�
 _CONTACT = re.compile(r"(?i)\b(?:официальн\w*|справочн\w*|поддержк\w*|горяч\w*\s+лини\w*|пресс-служб\w*|контакт\w*\s+(?:компани\w*|организаци\w*))\b")
 _EDUCATION = re.compile(r"(?i)\b(?:учебник\w*|справочник\w*|на\s+(?:уроке|лекции)|учебн\w*\s+материал\w*)\b")
 _ATTRIBUTION = re.compile(r"(?i)\b(?:алгоритм\w*|теори\w*|опыт\w*|теорем\w*|роман\w*|стих\w*|пьес\w*|симфони\w*|произведени\w*)\s+$")
-_PRIVATE_RECORD = re.compile(r"(?i)\b(?:анкет\w*|заявлен\w*|кредитн\w*\s+заявк\w*|досье|crm)\b")
+_PRIVATE_RECORD = re.compile(r"(?i)\b(?:анкет\w*|заявлен\w*|заявк\w*|досье|crm|(?:закрыт\w*|внутренн\w*|частн\w*|личн\w*|конфиденциальн\w*|непубличн\w*)\s+(?:спис\w*|запис\w*|заказ\w*|карточк\w*|реестр\w*|журнал\w*))\b")
 _ABBREVIATIONS = {"г", "ул", "д", "кв", "стр", "корп", "им", "пр", "пер", "обл", "р", "т"}
 _ELIGIBLE = {"FULL_NAME", "BIRTH_DATE", "BIRTH_PLACE", "ADDRESS", "EMAIL", "PHONE", "CITIZENSHIP"}
+_PRIVATE_HYPOTHESIS = "Текст содержит частные сведения о человеке."
+_AUTHORSHIP = re.compile(r"(?i)\b(?:автор\w*|докладчик\w*|подпись|обложк\w*|работах|работы)\b")
+_EDITORIAL_CONTACT = re.compile(r"(?i)\b(?:редакци\w*|пресс-служб\w*|читател\w*)\b")
+_PUBLIC_PROGRAM = re.compile(r"(?i)\b(?:лекци\w*|докладчик\w*|выставк\w*|анонс\w*|публичн\w*\s+программ\w*)\b")
+_PUBLIC_EVIDENCE = {
+    "public-context": ("local_nli_public_context", "semantic-public-context"),
+    "historical-reference": ("historical_public_reference", "historical-public-reference"),
+    "institution-dedication": ("institution_dedication", "institution-dedication"),
+}
 
 
 def _sentences(text: str) -> list[tuple[int, int]]:
@@ -58,14 +67,14 @@ def _detection(span: Span, score: float) -> Detection:
     return Detection(
         entity_id=str(uuid.uuid4()), category="FULL_NAME", evidence_spans=(span,),
         sensitive_spans=(span,), signals=(Signal("local_bert_person", score),),
-        detector_id="semantic_context", detector_version="1.0.0", score=score,
+        detector_id="semantic_context", detector_version="1.2.0", score=score,
         decision=Decision.MASK, rule_id="bert-person-protected-by-default",
     )
 
 
 class SemanticDetector(Detector):
     detector_id = "semantic_context"
-    detector_version = "1.1.0"
+    detector_version = "1.2.0"
 
     def __init__(self, model_dir: str) -> None:
         self.runtime = get_runtime(model_dir)
@@ -142,13 +151,13 @@ class SemanticDetector(Detector):
                 # Preserve the existing bounded historical-reference policy;
                 # novel names use NER/context below, not this small reference set.
                 if detection.category == "FULL_NAME" and _historical_name(value.lower().replace("ё", "е").split()):
-                    decisions[key] = "public-context", 1.0
+                    decisions[key] = "historical-reference", 1.0
                     continue
                 # A dedication inside an institution's name identifies the
                 # institution, not a current customer's personal record.
                 if (detection.category == "FULL_NAME" and _INSTITUTION.search(passage)
                         and re.search(r"(?i)\b(?:имени|им\.)\s*$", text[max(begin, span.start-20):span.start])):
-                    decisions[key] = "public-context", 1.0
+                    decisions[key] = "institution-dedication", 1.0
                     continue
                 hypotheses = self._hypotheses(value, detection.category, passage)
                 if hypotheses:
@@ -166,17 +175,32 @@ class SemanticDetector(Detector):
                 result.append(detection)
                 continue
             retained = []
+            retained_reasons = {}
             for span in detection.sensitive_spans:
                 reason, score = decisions[detection.category, span.start, span.end]
-                if reason == "public-context":
+                public_evidence = _PUBLIC_EVIDENCE.get(reason)
+                if public_evidence:
+                    signal, rule = public_evidence
                     result.append(replace(detection, entity_id=str(uuid.uuid4()), sensitive_spans=(),
                                           evidence_spans=(span,), decision=Decision.KEEP,
-                                          signals=(*detection.signals, Signal("local_nli_public_context", score, "negative")),
-                                          rule_id="semantic-public-context"))
+                                          signals=(*detection.signals, Signal(signal, score, "negative")),
+                                          rule_id=rule))
                 else:
                     retained.append(span)
+                    retained_reasons[reason] = max(score, retained_reasons.get(reason, 0.0))
             if retained:
-                result.append(replace(detection, sensitive_spans=tuple(retained)))
+                # Trace the policy that actually ran. A deterministic guard is
+                # not an NLI confidence score; uncertainty is not publicness.
+                signals = tuple(Signal(
+                    {"private-record": "private_record_guard", "private-model": "local_nli_private_context"}.get(reason, "context_uncertain_protected"),
+                    retained_reasons[reason] if reason == "private-model" else 1.0,
+                ) for reason in sorted(retained_reasons))
+                rule = ("semantic-private-record" if retained_reasons.keys() == {"private-record"}
+                        else "semantic-private-context" if retained_reasons.keys() == {"private-model"}
+                        else "semantic-uncertain-protected" if retained_reasons.keys() == {"uncertain-protected"}
+                        else detection.rule_id)
+                result.append(replace(detection, sensitive_spans=tuple(retained),
+                                      signals=(*detection.signals, *signals), rule_id=rule))
         return result
 
     def _context_decisions(self, jobs: dict) -> dict:
@@ -187,6 +211,28 @@ class SemanticDetector(Detector):
         pending = dict(jobs)
         decisions = {}
         scores = {}
+        # Topic classification alone cannot establish publicness: a private
+        # order for a painting still discusses art. Check for private information
+        # independently before allowing any public-topic hypothesis to release
+        # a candidate. Shared bounded passages run once per request.
+        # Batch independent privacy and first public hypotheses. This keeps
+        # the same decisions while amortizing the model invocation; later
+        # public alternatives remain short-circuited.
+        initial_pairs = list(dict.fromkeys(
+            pair for passage, hypotheses in jobs.values()
+            for pair in ((passage, _PRIVATE_HYPOTHESIS), (passage, hypotheses[0]))
+        ))
+        if initial_pairs:
+            scores.update(zip(initial_pairs, self.runtime.nli(initial_pairs)))
+        for key, (passage, _) in list(pending.items()):
+            e, n, c = scores[passage, _PRIVATE_HYPOTHESIS]
+            # A biography/reference book legitimately contains facts about a
+            # person. The privacy hypothesis alone cannot make those facts a
+            # private record; preserve the existing explicit-reference policy.
+            explicit_reference = bool(_EDUCATION.search(passage)) and not (_PRIVATE.search(passage) or _PRIVATE_RECORD.search(passage))
+            if e >= .80 and e - max(n, c) >= .50 and not explicit_reference:
+                decisions[key] = "private-model", e
+                del pending[key]
         for index in range(max((len(hypotheses) for _, hypotheses in jobs.values()), default=0)):
             pairs = list(dict.fromkeys(
                 (passage, hypotheses[index]) for passage, hypotheses in pending.values()
@@ -227,7 +273,7 @@ class SemanticDetector(Detector):
         # Broad relation families select suitable NLI questions; there is no
         # allowlist of celebrity names and a bare 'public data' claim is ignored.
         if category in {"ADDRESS", "EMAIL", "PHONE"}:
-            if _INSTITUTION.search(passage) or _CONTACT.search(passage):
+            if _INSTITUTION.search(passage) or _CONTACT.search(passage) or _EDITORIAL_CONTACT.search(passage):
                 if category == "ADDRESS":
                     match = _INSTITUTION.search(passage)
                     if match:
@@ -243,6 +289,10 @@ class SemanticDetector(Detector):
                 return ["В тексте говорится о биографии.", "В тексте говорится об истории."]
             return []
         hypotheses = []
+        if _PUBLIC_PROGRAM.search(passage):
+            hypotheses.append("В тексте говорится о публичном выступлении.")
+        if _AUTHORSHIP.search(passage):
+            hypotheses.append("В тексте указано имя автора опубликованного произведения.")
         if _EDUCATION.search(passage):
             hypotheses.append("Это учебный текст.")
         if _SCIENCE.search(passage):

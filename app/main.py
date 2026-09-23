@@ -221,6 +221,7 @@ def create_app(
             engine, policy_store, registry, transport, fault_injector,
             detector_manifest_version=detector_manifest_version,
             build_version="0.1.0",
+            limits=limits,
         )
     )
 

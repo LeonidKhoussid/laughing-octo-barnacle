@@ -72,9 +72,11 @@ _SURNAMES = {
     "романенко", "шевченко", "коваленко", "бондаренко", "кравченко", "морозенко",
 }
 
-# Tokenize words and initials together so offsets remain ordered. A hyphenated
-# surname is one token; punctuation between people cannot join name candidates.
-_NAME_TOKEN = re.compile(r"[А-ЯЁа-яё]\.|[А-ЯЁа-яё]+(?:[-‑–][А-ЯЁа-яё]+)*")
+# Tokenize Unicode letters without normalizing the text: decomposed accents
+# retain their original offsets. Hyphens and apostrophes stay inside one name.
+_LETTER = r"[^\W\d_]"
+_NAME_PART = rf"{_LETTER}(?:{_LETTER}|[\u0300-\u036f])*"
+_NAME_TOKEN = re.compile(rf"{_LETTER}\.|{_NAME_PART}(?:[-‑–'’]{_NAME_PART})*")
 
 
 def _forms(names: set[str]) -> set[str]:
@@ -110,9 +112,16 @@ _PERSON_CONTEXT = re.compile(
     r"(?i)\b(?:клиент(?:а|у|ом|е|ка|ки)?|гражданин|гражданина|гражданка|"
     r"пациент(?:а|у|ом|ка|ки)?|сотрудник(?:а|у|ом)?|сотрудница|"
     r"заявител(?:ь|я|ю|ем)|заявительница|пользовател(?:ь|я|ю|ем)|"
+    r"получател(?:ь|я|ю|ем|е|ьница|ьницы|ьнице|ьницу|ьницей)|"
+    r"заказчик(?:а|у|ом|е)?|заказчиц(?:а|ы|е|у|ей)|"
     r"абонент(?:а|у|ом)?|владелец|владельца|владелица|заявление)\b"
 )
-_FIO_CONTEXT = re.compile(r"(?i)(?:\bф\.\s*и\.\s*о\.|\b(?:фио|фамилия|имя|отчество)\b)")
+_FIO_CONTEXT = re.compile(
+    r"(?i)(?:\bф\.\s*и\.\s*о\.|\b(?:фио|фамилия|имя|отчество)\b)"
+    r"(?:\s+(?:клиента|пациента|заявителя|пользователя|получателя|получательницы|"
+    r"заказчика|заказчицы|сотрудника))?"
+    r"(?:\s+(?:записан[оа]?|указан[оа]?))?(?:\s+(?:латиницей|кириллицей))?"
+)
 _PUBLIC_PERSON_CONTEXT = re.compile(
     r"(?i)\b(?:поэт(?:а|у|ом|е|ы|ов)?|писател(?:ь|я|ю|ем|е|и|ей)|писательниц[аыеу]|"
     r"художник(?:а|у|ом|е|и|ов)?|композитор(?:а|у|ом|е|ы|ов)?|"
@@ -258,12 +267,19 @@ def _plausible(words: list[str], personal: bool, fio: bool) -> bool:
         if (personal and len(words) == 3 and pattern == ("first", "patronymic", "last")
                 and missing == [0] and not roles[0]):
             return True
-    return fio and all(role == {"unknown"} for role in roles)
+    # A patronymic anchors a three-part Russian name even when both the first
+    # name and surname are unfamiliar. Still require an explicit name/role
+    # label and capitalized parts; don't extend into following lowercase prose.
+    return fio and (
+        all(role == {"unknown"} for role in roles)
+        or (len(words) == 3 and all(word[0].isupper() for word in words)
+            and any("patronymic" in role for role in roles[1:]))
+    )
 
 
 class FullNameDetector(Detector):
     detector_id = "full_name"
-    detector_version = "1.2.0"
+    detector_version = "1.3.0"
 
     def detect(self, text: str) -> list[Detection]:
         out: list[Detection] = []
@@ -284,7 +300,9 @@ class FullNameDetector(Detector):
                 personal = _private_context(text, start, end)
                 fio = _attached(_FIO_CONTEXT, text, start, end)
                 public = _public_reference(text, start, end, words)
-                if not _plausible(words, personal or public, fio):
+                # A directly attached person role or name field supplies the
+                # structure for unfamiliar names; capitalization alone does not.
+                if not _plausible(words, personal or public, fio or personal):
                     continue
                 # Consume the whole candidate even when public: don't rediscover
                 # its patronymic/surname as an unrelated private two-word name.

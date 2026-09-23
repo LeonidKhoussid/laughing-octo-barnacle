@@ -46,7 +46,9 @@ def run(handler, **options):
 
 def test_closed_counts_requests_once_and_validates_fresh_restoration():
     handler, seen = fake_handler()
-    report = run(handler, mode="closed", duration=.03, concurrency=1, count=8,
+    # This tests accounting, not whether a loaded host can finish in 30 ms.
+    # The count cap still requires exactly eight requests.
+    report = run(handler, mode="closed", duration=1, concurrency=1, count=8,
                  kinds=("private",), restore_every=1)
     assert len(seen) == report["counts"]["attempted"] == report["counts"]["scheduled"] == 8
     assert report["counts"]["successful_total"] == 8
@@ -58,7 +60,7 @@ def test_closed_counts_requests_once_and_validates_fresh_restoration():
 
 def test_all_failure_types_count_once_and_not_as_success():
     handler, seen = fake_handler(failures={1: 429, 2: 503, 3: "timeout", 4: "malformed", 5: "incorrect"})
-    report = run(handler, mode="closed", duration=.03, concurrency=1, count=6, kinds=("private",))
+    report = run(handler, mode="closed", duration=1, concurrency=1, count=6, kinds=("private",))
     counts = report["counts"]
     assert len(seen) == counts["attempted"] == 6
     assert counts["successful_total"] == 1
@@ -71,7 +73,7 @@ def test_all_failure_types_count_once_and_not_as_success():
 
 def test_incorrect_restoration_is_not_a_success():
     handler, _ = fake_handler(wrong_restore=True)
-    report = run(handler, mode="closed", duration=.03, concurrency=1, count=2,
+    report = run(handler, mode="closed", duration=1, concurrency=1, count=2,
                  kinds=("private",), restore_every=1)
     assert report["counts"]["successful_total"] == 1
     assert report["counts"]["correctness_failure"] == 1

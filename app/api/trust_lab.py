@@ -13,16 +13,19 @@ profile and cannot be enabled by user text (R52).
 from __future__ import annotations
 
 import os
+import time
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.errors import forbidden, unauthorized
+from app.api.errors import forbidden, overloaded, processing_error, retryable, too_large, unauthorized
 from app.core.engine import Engine
 from app.detectors.registry import DetectorRegistry
+from app.nlp.model_runtime import ModelUnavailable
 from app.policies.loader import PolicyStore
 from app.policies.schema import ConsumerPolicy
 from app.security.auth import verify_api_key
+from app.security.limits import BackpressureError, BodyTooLargeError, DeadlineExceededError, Limits
 from app.trust_lab.faults import FaultInjector, FaultInjectionDisabled
 from app.trust_lab.mutations import GoldSpan, LabeledExample
 from app.trust_lab.regression import (
@@ -155,8 +158,11 @@ def build_trust_lab_router(
     fault_injector: FaultInjector,
     detector_manifest_version: str,
     build_version: str = "0.1.0",
+    limits: Limits | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/trust-lab", tags=["trust-lab"])
+    if limits is None:
+        limits = Limits()
     runner = TrustLabRunner(
         engine,
         policy_store,
@@ -176,20 +182,39 @@ def build_trust_lab_router(
             raise forbidden()
         if not _verify_consumer_auth(policy, x_api_key):
             raise unauthorized()
-        # Selected-input checks must use the submitted input (section 17.4).
-        # When labeled=True, derive gold spans from the submitted text via the
-        # shared engine (marked as derived, not independent ground truth).
-        labeled = None
-        if req.labeled:
-            labeled = _labeled_from_text(engine, req.text, req.consumer, policy_store)
-        result = runner.action_a(
-            req.text,
-            req.consumer,
-            labeled=labeled,
-            seed=req.seed,
-            run_variations=req.run_variations,
-        )
-        return _action_a_dict(result)
+        try:
+            limits.check_body(len(req.text.encode("utf-8")))
+            limits.acquire()
+        except BodyTooLargeError:
+            raise too_large()
+        except BackpressureError:
+            raise overloaded()
+        try:
+            started_at = time.monotonic()
+            # Gold derived from this input is not independent ground truth.
+            labeled = (
+                _labeled_from_text(engine, req.text, req.consumer, policy_store)
+                if req.labeled else None
+            )
+            result = runner.action_a(
+                req.text,
+                req.consumer,
+                labeled=labeled,
+                seed=req.seed,
+                run_variations=req.run_variations,
+            )
+            limits.check_deadline(started_at)
+            return _action_a_dict(result)
+        except HTTPException:
+            raise
+        except DeadlineExceededError:
+            raise overloaded()
+        except ModelUnavailable:
+            raise retryable()
+        except Exception:
+            raise processing_error()
+        finally:
+            limits.release()
 
     @router.post("/action-b")
     def action_b(req: ActionBRequest):
@@ -270,6 +295,7 @@ def _action_a_dict(result) -> dict:
         "spans": [_span_dict(s) for s in result.spans],
         "service_words": result.service_words,
         "reasons": result.reasons,
+        "decisions": result.decisions,
         "timings": [{"stage": t.stage, "seconds": t.seconds} for t in result.timings],
         "policy_version": result.policy_version,
         "detector_manifest_version": result.detector_manifest_version,

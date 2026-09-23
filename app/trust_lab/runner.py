@@ -58,6 +58,7 @@ class ActionAResult:
     spans: list[GoldSpan] = field(default_factory=list)
     service_words: list[str] = field(default_factory=list)
     reasons: list[dict] = field(default_factory=list)
+    decisions: list[dict] = field(default_factory=list)
     timings: list[StageTiming] = field(default_factory=list)
     policy_version: str = ""
     detector_manifest_version: str = ""
@@ -168,6 +169,24 @@ class TrustLabRunner:
             spans=masked_spans,
             service_words=list(labeled.service_words) if labeled else [],
             reasons=reasons,
+            decisions=[
+                {
+                    "category": detection.category,
+                    "decision": detection.decision.value,
+                    "rule_id": detection.rule_id,
+                    "detector_id": detection.detector_id,
+                    "evidence_spans": [
+                        {"start": span.start, "end": span.end}
+                        for span in detection.evidence_spans
+                    ],
+                    "sensitive_spans": [
+                        {"start": span.start, "end": span.end}
+                        for span in detection.sensitive_spans
+                    ],
+                    "signals": [signal.name for signal in detection.signals],
+                }
+                for detection in result.detections
+            ],
             timings=[
                 StageTiming("mask", mask_time),
                 StageTiming("unmask", unmask_time),

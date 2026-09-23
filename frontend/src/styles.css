@@ -603,6 +603,21 @@ html, body, #root {
 .judge-output { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
 .judge-output .token { background: var(--primary-soft); color: var(--text); border-radius: 4px; padding: 2px 0; }
 .judge-error { color: var(--error); background: var(--surface); border: 1px solid currentColor; border-radius: var(--radius-md); padding: 16px; }
+.context-comparison { margin-top: 24px; padding: 20px 24px; background: var(--surface); border-radius: var(--radius-lg); }
+.context-comparison > summary { font-size: 17px; font-weight: 600; cursor: pointer; }
+.context-comparison summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 2px; }
+.context-comparison > p, .context-evidence { font-size: 14px; line-height: 1.6; }
+.context-status:empty { margin: 0; }
+.context-results { margin-top: 20px; gap: 16px; }
+.context-results .judge-result { background: var(--surface-muted); padding: 20px; }
+.context-results h3 { margin: 0; font-size: 16px; }
+.context-results .judge-output { font-size: 14px; }
+.context-outcome { padding-top: 16px; border-top: 1px solid var(--border); font-weight: 600; }
+.context-evidence { margin-top: 20px; }
+.context-evidence summary { cursor: pointer; }
+.context-evidence h4 { margin: 20px 0 8px; }
+.context-evidence p, .context-evidence ul { margin: 8px 0; }
+.context-rule { overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 1024px) {
   .judge-results { grid-template-columns: 1fr; }
 }
@@ -615,6 +630,7 @@ html, body, #root {
   .judge-demo { padding: 20px 16px; }
   .judge-intro h2 { font-size: 22px; }
   .judge-input, .judge-result { padding: 16px; }
+  .context-comparison { padding: 16px; }
   .judge-input .composer-actions { align-items: stretch; }
   .judge-input .primary-btn { min-width: 0; }
 }
