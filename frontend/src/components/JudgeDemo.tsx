@@ -1,0 +1,141 @@
+import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/api";
+import type { MaskResponse } from "../lib/types";
+import { ApiErrorImpl } from "../lib/types";
+import type { JournalEntry } from "../App";
+import { TokenizedText } from "./Workspace";
+
+const EXAMPLE = "Клиент Иванов Иван Петрович, телефон +7 918 123-45-67, карта 4276 1234 5678 9012. Почему не прошёл платёж?";
+const EXAMPLES = [
+  { label: "Данные клиента", text: EXAMPLE },
+  { label: "Публичная личность", text: "Поэт Александр Сергеевич Пушкин написал роман «Евгений Онегин»." },
+  { label: "Клиент с тем же именем", text: "Клиент Александр Сергеевич Пушкин, телефон +7 918 123-45-67, карта 4276 1234 5678 9012. Почему не прошёл платёж?" },
+  { label: "Смешанный контекст", text: "Клиент Иван Иванович Петров читает произведения Александра Сергеевича Пушкина. Телефон клиента: +7 918 123-45-67." },
+  { label: "Наука и личные данные", text: "Альберт Эйнштейн разработал теорию относительности. Клиент Азамат Нурмагомедов оставил телефон +7 903 123-45-67." },
+  { label: "Литература", text: "В романе «Анна Каренина» Алексей Александрович Каренин — вымышленный персонаж." },
+];
+
+export default function JudgeDemo({ addJournal }: {
+  addJournal: (entry: JournalEntry) => void;
+}) {
+  const [input, setInput] = useState(EXAMPLE);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<{
+    original: string;
+    mask: MaskResponse;
+    restored: string | null;
+    duration: number;
+  } | null>(null);
+  const sequence = useRef(0);
+
+  useEffect(() => () => { sequence.current++; }, []);
+
+  function changeInput(text: string) {
+    sequence.current++;
+    setInput(text);
+    setResult(null);
+    setError("");
+    setLoading(false);
+  }
+
+  async function runDemo() {
+    if (loading || !input.trim()) return;
+    const current = ++sequence.current;
+    const original = input;
+    const started = performance.now();
+    setLoading(true);
+    setResult(null);
+    setError("");
+    try {
+      const mask = await api.mask({ text: original, consumer: "autocheck" });
+      if (current !== sequence.current) return;
+      setResult({ original, mask, restored: null, duration: performance.now() - started });
+      addJournal({
+        time: new Date().toISOString(), request_id: mask.context_id,
+        consumer: "autocheck", operation: "mask", detected: mask.detected_counts,
+        duration_ms: performance.now() - started, outcome: "success", policy: mask.policy_version,
+      });
+      const restoreStarted = performance.now();
+      const restored = await api.unmask({
+        maskedText: mask.masked_text, consumer: "autocheck", contextId: mask.context_id,
+      });
+      if (current !== sequence.current) return;
+      const exact = restored.original_text === original;
+      setResult({ original, mask, restored: restored.original_text, duration: performance.now() - started });
+      if (!exact) setError("Восстановленный текст отличается от исходного. Проверка не пройдена.");
+      addJournal({
+        time: new Date().toISOString(), request_id: mask.context_id,
+        consumer: "autocheck", operation: "unmask", detected: {},
+        duration_ms: performance.now() - restoreStarted,
+        outcome: exact ? "success" : "mismatch", policy: restored.policy_version,
+      });
+    } catch (e) {
+      if (current === sequence.current) {
+        setError(e instanceof ApiErrorImpl && e.status === 413
+          ? "Текст слишком большой. Сократите его и повторите проверку."
+          : "Не удалось завершить проверку. Попробуйте ещё раз или проверьте доступность сервиса.");
+      }
+    } finally {
+      if (current === sequence.current) setLoading(false);
+    }
+  }
+
+  const complete = result !== null && result.restored !== null;
+  const exact = complete && result.restored === result.original;
+
+  return (
+    <main className="judge-demo">
+      <div className="judge-intro">
+        <h2>Убедитесь, что данные скрыты и восстановлены</h2>
+        <p>Пример уже заполнен. Нажмите «Проверить» или введите свой текст.</p>
+        <p className="judge-local">Публичные упоминания сохраняются, личные записи защищаются. Проверьте разницу на примерах.</p>
+        <p className="judge-local">Без ключа и настроек. Проверка выполняется локально, без вызова LLM.</p>
+      </div>
+
+      <form className="judge-input composer" onSubmit={(e) => { e.preventDefault(); void runDemo(); }}>
+        <label className="judge-example" htmlFor="judge-example">Пример
+          <select id="judge-example" value={EXAMPLES.findIndex((example) => example.text === input)}
+            onChange={(e) => changeInput(EXAMPLES[Number(e.target.value)].text)}>
+            {!EXAMPLES.some((example) => example.text === input) && <option value={-1} disabled>Свой текст</option>}
+            {EXAMPLES.map((example, index) => <option key={example.label} value={index}>{example.label}</option>)}
+          </select>
+        </label>
+        <label htmlFor="judge-input"><strong>Исходный текст</strong><span>Личные данные в примерах вымышлены</span></label>
+        <textarea id="judge-input" value={input} rows={4} disabled={loading}
+          onChange={(e) => changeInput(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); void runDemo(); }
+          }} />
+        <div className="composer-actions">
+          <button className="ghost-btn" type="button" onClick={() => changeInput(EXAMPLE)}>Вернуть пример</button>
+          <button className="primary-btn" type="submit" disabled={loading || !input.trim()}>
+            {loading ? "Проверяем…" : "Проверить"}
+          </button>
+        </div>
+      </form>
+
+      {error && <p className="judge-error" role="alert">{error}</p>}
+      <div className="judge-status" role="status" aria-live="polite">
+        {loading && "Скрываем данные и проверяем восстановление…"}
+        {exact && !loading && <>
+          <strong>Текст восстановлен без изменений</strong>
+          <span>Найдено фрагментов: {result.mask.spans.length} · Полный цикл: {Math.round(result.duration)} мс</span>
+        </>}
+      </div>
+
+      {result && <div className="judge-results">
+        <section className="judge-result" aria-labelledby="masked-title">
+          <h2 id="masked-title">После маскирования</h2>
+          <p className="judge-caption">{result.mask.spans.length ? "Найденные данные заменены непрозрачными токенами." : "Персональные данные не обнаружены. Текст не изменён."}</p>
+          <div className="judge-output"><TokenizedText text={result.mask.masked_text} /></div>
+        </section>
+        <section className="judge-result" aria-labelledby="restored-title">
+          <h2 id="restored-title">После восстановления</h2>
+          <p className="judge-caption">{exact ? "Точное совпадение с исходным текстом, включая пробелы." : complete ? "Есть отличия от исходного текста." : "Результат появится после завершения проверки."}</p>
+          <div className="judge-output">{result.restored ?? (loading ? "Восстанавливаем…" : "Восстановление не завершено.")}</div>
+        </section>
+      </div>}
+    </main>
+  );
+}

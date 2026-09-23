@@ -1,0 +1,19 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "instructions": ["rules.md"],
+  "provider": {
+    "alfagen": {
+      "name": "alfagen",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://alfagen.alfabank.ru/continue-dev/"
+      },
+      "models": {
+        "deepseek-ai/DeepSeek-V4-Flash-0731": {
+          "name": "DeepSeek-V4-Flash-0731",
+          "reasoning": true
+        }
+      }
+    }
+  }
+}

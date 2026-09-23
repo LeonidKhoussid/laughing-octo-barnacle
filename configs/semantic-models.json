@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "models": {
+    "ner": {
+      "repository": "onnx-community/ner-rubert-tiny-news-ONNX",
+      "revision": "930eccc0b433dae84126a5837e9a169f0a4639e3",
+      "upstream": "r1char9/ner-rubert-tiny-news",
+      "license": "MIT",
+      "license_url": "https://huggingface.co/onnx-community/ner-rubert-tiny-news-ONNX/blob/930eccc0b433dae84126a5837e9a169f0a4639e3/README.md",
+      "weights": "model_quantized.onnx",
+      "files": {
+        "config.json": {
+          "url": "https://huggingface.co/onnx-community/ner-rubert-tiny-news-ONNX/resolve/930eccc0b433dae84126a5837e9a169f0a4639e3/config.json",
+          "sha256": "a7e67406eca35258f8f566663c38ec5a543d4a467b57af28b83a6ab9c01c46ce",
+          "bytes": 1083
+        },
+        "tokenizer.json": {
+          "url": "https://huggingface.co/onnx-community/ner-rubert-tiny-news-ONNX/resolve/930eccc0b433dae84126a5837e9a169f0a4639e3/tokenizer.json",
+          "sha256": "4869a0a2259765d989ddc5088e29added7e00e09ed0fb6eec8c900938cdb5d6c",
+          "bytes": 2413537
+        },
+        "model_quantized.onnx": {
+          "url": "https://huggingface.co/onnx-community/ner-rubert-tiny-news-ONNX/resolve/930eccc0b433dae84126a5837e9a169f0a4639e3/onnx/model_quantized.onnx",
+          "sha256": "94cebd8ab912cf48c391530131b31445fdbad9bf85d6549e9573f831acc3e8cf",
+          "bytes": 29252719
+        }
+      }
+    },
+    "context": {
+      "repository": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+      "revision": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
+      "upstream": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+      "license": "MIT",
+      "license_url": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli/blob/8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c/README.md",
+      "weights": "model.onnx",
+      "files": {
+        "model.onnx": {
+          "url": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli/resolve/8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c/onnx/model.onnx",
+          "sha256": "7d39629484bdad052176a0cff26ffe408d8c2b69c7abd242716fee320badd661",
+          "bytes": 1116115065
+        },
+        "tokenizer.json": {
+          "url": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli/resolve/8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c/tokenizer.json",
+          "sha256": "3aca3ce69a0a35aeb144a52c4f1d41c4246b8785f8f398315cc8fb6b24057810",
+          "bytes": 16331396
+        },
+        "config.json": {
+          "url": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli/resolve/8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c/config.json",
+          "sha256": "4e4430c95100d613df80fa01276f231931e1b535557cf62fbb3cc50323e50cca",
+          "bytes": 1066
+        }
+      }
+    }
+  }
+}

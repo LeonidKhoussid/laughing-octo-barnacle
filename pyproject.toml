@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alfagen-pii-gateway"
+version = "0.1.0"
+description = "AlfaGen PII Gateway — reversible masking of personal data between bank systems and LLM"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "AlfaGen Team" }]
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+    "pydantic>=2.7,<3.0",
+    "pydantic-settings>=2.3,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "cryptography>=42.0,<45.0",
+    "redis>=5.0,<6.0",
+    "onnxruntime==1.30.0",
+    "tokenizers==0.23.2",
+    "numpy>=2.0,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "httpx>=0.27,<1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

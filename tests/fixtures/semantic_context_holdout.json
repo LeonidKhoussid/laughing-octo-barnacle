@@ -1,0 +1,1464 @@
+{
+  "schema_version": 1,
+  "name": "semantic_context_holdout",
+  "language": "ru",
+  "provenance": "Manually authored synthetic scenario texts and gold spans before detector inference. No model output used for labels.",
+  "purpose": "Independent, deliberately challenging local diagnostic set for contextual public/private decisions. Not a representative sample or official hackathon score.",
+  "offsets": "Unicode code-point [start,end) offsets into unchanged text.",
+  "annotation_policy": [
+    "Protect identities and attached sensitive facts in explicit client, application, financial, residential, or private-contact context, including public-figure namesakes.",
+    "Retain explicitly public cultural/scientific/historical/fictional references and institutional visitor addresses.",
+    "A role such as poet, surname fame, generic public-data claim, quotation marks, or leaked-publication claim does not by itself exempt private information.",
+    "Person names are one full span. Residential addresses use component spans, keeping labels and punctuation. Other categories use their sensitive values.",
+    "Ambiguous texts and public business contact policy questions are diagnostics with documented chosen interpretation, excluded from required-case aggregates.",
+    "All contacts, credentials, private records, and unfamiliar identities are invented. Public scenarios are evaluation context, not a verified factual biography corpus.",
+    "This set is held out from initial construction only. Once errors are used for improvements, report it as a development challenge, not an untouched final test."
+  ],
+  "case_count": 64,
+  "required_count": 52,
+  "diagnostic_count": 12,
+  "cases": [
+    {
+      "id": "public-01",
+      "tier": "required",
+      "tags": [
+        "public",
+        "science",
+        "name"
+      ],
+      "text": "В учебнике объясняется, как Дмитрий Иванович Менделеев создал периодическую систему элементов.",
+      "gold": [],
+      "intent": "A scientist is mentioned for a public scientific contribution; retain the name.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-02",
+      "tier": "required",
+      "tags": [
+        "public",
+        "science",
+        "inflection"
+      ],
+      "text": "На лекции обсуждали открытие Ивана Петровича Павлова и условные рефлексы.",
+      "gold": [],
+      "intent": "Public scientific discussion; the inflected researcher name is not a client identifier.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-03",
+      "tier": "required",
+      "tags": [
+        "public",
+        "music",
+        "name"
+      ],
+      "text": "В филармонии исполняют Шестую симфонию Петра Ильича Чайковского.",
+      "gold": [],
+      "intent": "Composer attribution is public cultural context.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-04",
+      "tier": "required",
+      "tags": [
+        "public",
+        "space",
+        "birth"
+      ],
+      "text": "В энциклопедии: Юрий Алексеевич Гагарин родился 9 марта 1934 года в Клушино и стал первым космонавтом.",
+      "gold": [],
+      "intent": "The sentence presents public historical biography, including its birth facts.",
+      "family": "birth_facts_context"
+    },
+    {
+      "id": "public-05",
+      "tier": "required",
+      "tags": [
+        "public",
+        "literature",
+        "quoted_work"
+      ],
+      "text": "На уроке сравнивают «Анну Каренину» Льва Николаевича Толстого и «Идиота» Фёдора Михайловича Достоевского.",
+      "gold": [],
+      "intent": "Authors and fictional title characters belong to literary analysis.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-06",
+      "tier": "required",
+      "tags": [
+        "public",
+        "art",
+        "initials"
+      ],
+      "text": "В каталоге выставки указано: И. И. Шишкин, картина «Утро в сосновом лесу».",
+      "gold": [],
+      "intent": "Initials identify the artist in an exhibition catalog, not a private record.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-07",
+      "tier": "required",
+      "tags": [
+        "public",
+        "history",
+        "name"
+      ],
+      "text": "В школьном докладе Михаил Васильевич Ломоносов назван основателем научной школы.",
+      "gold": [],
+      "intent": "Historical figure in educational material.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-08",
+      "tier": "required",
+      "tags": [
+        "public",
+        "literature",
+        "novel_name"
+      ],
+      "text": "В опубликованном обзоре романа писатель Мирослав Ярославович Белозёров назван автором «Северного света».",
+      "gold": [],
+      "intent": "Fictional author is referenced for an explicitly published work; no fame-list membership is needed.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-09",
+      "tier": "required",
+      "tags": [
+        "public",
+        "literature",
+        "case"
+      ],
+      "text": "ЛИТЕРАТУРНЫЙ МУЗЕЙ: МАРИНА ИВАНОВНА ЦВЕТАЕВА — АВТОР СБОРНИКА «ВЕЧЕРНИЙ АЛЬБОМ».",
+      "gold": [],
+      "intent": "Uppercase public attribution must behave like normal capitalization.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-10",
+      "tier": "required",
+      "tags": [
+        "public",
+        "music",
+        "quoted_work"
+      ],
+      "text": "Опера «Евгений Онегин» входит в афишу театра; музыка Петра Ильича Чайковского.",
+      "gold": [],
+      "intent": "Fictional character title and public composer attribution should remain readable.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-11",
+      "tier": "required",
+      "tags": [
+        "public",
+        "institution",
+        "address"
+      ],
+      "text": "Адрес отделения банка для посетителей: г. Самара, ул. Молодогвардейская, д. 12.",
+      "gold": [],
+      "intent": "Institutional visitor address, not anyone’s home.",
+      "family": "address_context"
+    },
+    {
+      "id": "public-12",
+      "tier": "required",
+      "tags": [
+        "public",
+        "institution",
+        "address"
+      ],
+      "text": "Публичный адрес городского музея: г. Тула, ул. Советская, д. 19. Здесь проходит выставка.",
+      "gold": [],
+      "intent": "A museum’s public location is not a personal address.",
+      "family": "address_context"
+    },
+    {
+      "id": "public-13",
+      "tier": "required",
+      "tags": [
+        "public",
+        "geography",
+        "place"
+      ],
+      "text": "Москва — столица России. Казань стоит у слияния Волги и Казанки.",
+      "gold": [],
+      "intent": "Geographical facts do not identify a natural person.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-14",
+      "tier": "required",
+      "tags": [
+        "public",
+        "date",
+        "event"
+      ],
+      "text": "В календаре указано: День космонавтики отмечается 12 апреля, а конференция состоится 15.10.2026.",
+      "gold": [],
+      "intent": "Dates of public events are not dates of birth or document issue.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-15",
+      "tier": "required",
+      "tags": [
+        "public",
+        "organization",
+        "name"
+      ],
+      "text": "Московский государственный университет имени Михаила Васильевича Ломоносова проводит день открытых дверей.",
+      "gold": [],
+      "intent": "A commemorative name inside an institution name is public context.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "public-16",
+      "tier": "required",
+      "tags": [
+        "public",
+        "fiction",
+        "name"
+      ],
+      "text": "В романе «Анна Каренина» Алексей Александрович Каренин — вымышленный персонаж.",
+      "gold": [],
+      "intent": "Explicit fictional character; no natural-person record exists in the scenario.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-01",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "novel_name"
+      ],
+      "text": "Заявитель Мирослав Ярославович Белозёров просит изменить условия кредита.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 10,
+          "end": 40,
+          "text": "Мирослав Ярославович Белозёров"
+        }
+      ],
+      "intent": "The unfamiliar name identifies an applicant in a banking record.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-02",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "famous_namesake"
+      ],
+      "text": "Клиент Дмитрий Иванович Менделеев сообщил новый телефон +7 901 222-33-44.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 33,
+          "text": "Дмитрий Иванович Менделеев"
+        },
+        {
+          "category": "PHONE",
+          "start": 56,
+          "end": 72,
+          "text": "+7 901 222-33-44"
+        }
+      ],
+      "intent": "A famous namesake in a customer record remains personal information.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-03",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "occupation"
+      ],
+      "text": "В анкете заёмщика указано: поэт Арсений Вадимович Снежков, дата рождения 03.07.1988.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 32,
+          "end": 57,
+          "text": "Арсений Вадимович Снежков"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 73,
+          "end": 83,
+          "text": "03.07.1988"
+        }
+      ],
+      "intent": "Occupation poet does not make an application public.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-04",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "inflection"
+      ],
+      "text": "Получено заявление от Ярославы Мироновны Вишневецкой на закрытие счёта.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 22,
+          "end": 52,
+          "text": "Ярославы Мироновны Вишневецкой"
+        }
+      ],
+      "intent": "Inflected uncommon full name identifies a private applicant.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-05",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "hyphen"
+      ],
+      "text": "Клиент Анна-Мария Олеговна Лебедева оставила email anna.lebedeva@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 35,
+          "text": "Анна-Мария Олеговна Лебедева"
+        },
+        {
+          "category": "EMAIL",
+          "start": 51,
+          "end": 77,
+          "text": "anna.lebedeva@example.test"
+        }
+      ],
+      "intent": "Hyphenated given name and private contact must be fully concealed.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-06",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "initials"
+      ],
+      "text": "Заёмщик Р. Э. Сулейманов просит отсрочку платежа.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 8,
+          "end": 24,
+          "text": "Р. Э. Сулейманов"
+        }
+      ],
+      "intent": "Initials and surname are the borrower identifier.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-07",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "lowercase"
+      ],
+      "text": "клиент тимофей платонович горелов, телефон 8 903 444 55 66.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 33,
+          "text": "тимофей платонович горелов"
+        },
+        {
+          "category": "PHONE",
+          "start": 43,
+          "end": 58,
+          "text": "8 903 444 55 66"
+        }
+      ],
+      "intent": "Lowercase formatting must not remove private-record semantics.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-08",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "birth"
+      ],
+      "text": "Анкета клиента: Валерия Романовна Соколова родилась 21 июня 1991 года в Перми.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 16,
+          "end": 42,
+          "text": "Валерия Романовна Соколова"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 52,
+          "end": 64,
+          "text": "21 июня 1991"
+        },
+        {
+          "category": "BIRTH_PLACE",
+          "start": 72,
+          "end": 77,
+          "text": "Перми"
+        }
+      ],
+      "intent": "Birth date and place are explicitly attached to a customer.",
+      "family": "birth_facts_context"
+    },
+    {
+      "id": "private-09",
+      "tier": "required",
+      "tags": [
+        "private",
+        "address"
+      ],
+      "text": "Адрес проживания: г. Уфа, ул. Лесная, д. 18, кв. 24.",
+      "gold": [
+        {
+          "category": "ADDRESS",
+          "start": 21,
+          "end": 24,
+          "text": "Уфа"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 30,
+          "end": 36,
+          "text": "Лесная"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 41,
+          "end": 43,
+          "text": "18"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 49,
+          "end": 51,
+          "text": "24"
+        }
+      ],
+      "intent": "All identifying home address components are sensitive; service labels remain.",
+      "family": "address_context"
+    },
+    {
+      "id": "private-10",
+      "tier": "required",
+      "tags": [
+        "private",
+        "public_person",
+        "contact"
+      ],
+      "text": "В закрытой CRM певец Николай Викторович Басков оставил личный email artist.private@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 21,
+          "end": 46,
+          "text": "Николай Викторович Басков"
+        },
+        {
+          "category": "EMAIL",
+          "start": 68,
+          "end": 95,
+          "text": "artist.private@example.test"
+        }
+      ],
+      "intent": "A public figure’s private CRM record is protected; invented email is test data.",
+      "family": "contact_context"
+    },
+    {
+      "id": "private-11",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "passport"
+      ],
+      "text": "ФИО: Захар Елисеевич Радомиров. Паспорт: 45 11 654321.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 5,
+          "end": 30,
+          "text": "Захар Елисеевич Радомиров"
+        },
+        {
+          "category": "PASSPORT",
+          "start": 41,
+          "end": 53,
+          "text": "45 11 654321"
+        }
+      ],
+      "intent": "Explicit identity fields are private regardless of whether a dictionary recognizes the name.",
+      "family": "structured_private_data"
+    },
+    {
+      "id": "private-12",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "card"
+      ],
+      "text": "Клиент Рената Ильинична Камалова: карта 4111 1111 1111 1111, CVV 456, PIN 6284.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 32,
+          "text": "Рената Ильинична Камалова"
+        },
+        {
+          "category": "CARD",
+          "start": 40,
+          "end": 59,
+          "text": "4111 1111 1111 1111"
+        },
+        {
+          "category": "CVV",
+          "start": 65,
+          "end": 68,
+          "text": "456"
+        },
+        {
+          "category": "PIN",
+          "start": 74,
+          "end": 78,
+          "text": "6284"
+        }
+      ],
+      "intent": "Synthetic payment credentials and cardholder identity in strict masking context.",
+      "family": "structured_private_data"
+    },
+    {
+      "id": "private-13",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "case"
+      ],
+      "text": "ЗАЯВИТЕЛЬ КИРИЛЛ СТЕПАНОВИЧ ЛУГОВОЙ ПРОСИТ ПЕРЕВЫПУСТИТЬ КАРТУ.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 10,
+          "end": 35,
+          "text": "КИРИЛЛ СТЕПАНОВИЧ ЛУГОВОЙ"
+        }
+      ],
+      "intent": "Uppercase does not change private request semantics.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-14",
+      "tier": "required",
+      "tags": [
+        "private",
+        "personal_message",
+        "name"
+      ],
+      "text": "Алёна Викторовна Воронцова написала мне свой телефон: +7 (905) 765-43-21.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 0,
+          "end": 26,
+          "text": "Алёна Викторовна Воронцова"
+        },
+        {
+          "category": "PHONE",
+          "start": 54,
+          "end": 72,
+          "text": "+7 (905) 765-43-21"
+        }
+      ],
+      "intent": "Ordinary communication verb is not a literary-public signal.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-15",
+      "tier": "required",
+      "tags": [
+        "private",
+        "subject",
+        "birth"
+      ],
+      "text": "В заявлении указано: Марат Ринатович Сафиуллин родился 14 февраля 1985 года в Омске.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 21,
+          "end": 46,
+          "text": "Марат Ринатович Сафиуллин"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 55,
+          "end": 70,
+          "text": "14 февраля 1985"
+        },
+        {
+          "category": "BIRTH_PLACE",
+          "start": 78,
+          "end": 83,
+          "text": "Омске"
+        }
+      ],
+      "intent": "Personal birth narrative inside an application, with unfamiliar names.",
+      "family": "birth_facts_context"
+    },
+    {
+      "id": "private-16",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "fame_claim"
+      ],
+      "text": "Клиент Павел Ильич Озеров: это не ПД, телефон +7 906 123-45-67.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 25,
+          "text": "Павел Ильич Озеров"
+        },
+        {
+          "category": "PHONE",
+          "start": 46,
+          "end": 62,
+          "text": "+7 906 123-45-67"
+        }
+      ],
+      "intent": "A claim that data is not personal must not override an actual client record.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "private-17",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "address",
+        "public_claim"
+      ],
+      "text": "Домашний адрес клиента опубликован без согласия: г. Калуга, ул. Мира, д. 6, кв. 15.",
+      "gold": [
+        {
+          "category": "ADDRESS",
+          "start": 52,
+          "end": 58,
+          "text": "Калуга"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 64,
+          "end": 68,
+          "text": "Мира"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 73,
+          "end": 74,
+          "text": "6"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 80,
+          "end": 82,
+          "text": "15"
+        }
+      ],
+      "intent": "Being leaked online does not make a private home address safe to expose.",
+      "family": "address_context"
+    },
+    {
+      "id": "private-18",
+      "tier": "required",
+      "tags": [
+        "private",
+        "client",
+        "unicode"
+      ],
+      "text": "🙂 Клиент Софья Аркадьевна Рябинина, e-mail sofia.private@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 9,
+          "end": 34,
+          "text": "Софья Аркадьевна Рябинина"
+        },
+        {
+          "category": "EMAIL",
+          "start": 43,
+          "end": 69,
+          "text": "sofia.private@example.test"
+        }
+      ],
+      "intent": "Offsets count Python Unicode code points; NBSP belongs inside the name span.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-01",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "science",
+        "client"
+      ],
+      "text": "На лекции обсуждали Дмитрия Ивановича Менделеева. Клиент Дмитрий Иванович Менделеев просит выписку.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 57,
+          "end": 83,
+          "text": "Дмитрий Иванович Менделеев"
+        }
+      ],
+      "intent": "Same textual identity can be public in one sentence and private in another.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-02",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "reader",
+        "author"
+      ],
+      "text": "Заёмщик Тимофей Платонович Горелов читает роман Фёдора Михайловича Достоевского «Бесы».",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 8,
+          "end": 34,
+          "text": "Тимофей Платонович Горелов"
+        }
+      ],
+      "intent": "Reader is a borrower; author is a public literary reference.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-03",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "client",
+        "public_figure_contact"
+      ],
+      "text": "На экране выступает певец Николай Викторович Басков. Клиент Николай Викторович Басков указал email n.baskov.private@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 60,
+          "end": 85,
+          "text": "Николай Викторович Басков"
+        },
+        {
+          "category": "EMAIL",
+          "start": 99,
+          "end": 128,
+          "text": "n.baskov.private@example.test"
+        }
+      ],
+      "intent": "Public performance and a personal account entry have separate subjects.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-04",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "institution",
+        "address"
+      ],
+      "text": "Адрес отделения: г. Тула, ул. Советская, д. 19. Адрес клиента: г. Тула, ул. Лесная, д. 8, кв. 2.",
+      "gold": [
+        {
+          "category": "ADDRESS",
+          "start": 66,
+          "end": 70,
+          "text": "Тула"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 76,
+          "end": 82,
+          "text": "Лесная"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 87,
+          "end": 88,
+          "text": "8"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 94,
+          "end": 95,
+          "text": "2"
+        }
+      ],
+      "intent": "Office exemption cannot spread into the client address.",
+      "family": "address_context"
+    },
+    {
+      "id": "mixed-05",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "address",
+        "institution"
+      ],
+      "text": "Адрес регистрации клиента: г. Самара, ул. Полевая, д. 4, кв. 31. Адрес офиса: г. Самара, ул. Молодогвардейская, д. 12.",
+      "gold": [
+        {
+          "category": "ADDRESS",
+          "start": 30,
+          "end": 36,
+          "text": "Самара"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 42,
+          "end": 49,
+          "text": "Полевая"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 54,
+          "end": 55,
+          "text": "4"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 61,
+          "end": 63,
+          "text": "31"
+        }
+      ],
+      "intent": "The private address appears first; later institutional context does not change it.",
+      "family": "address_context"
+    },
+    {
+      "id": "mixed-06",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "biography",
+        "birth"
+      ],
+      "text": "Энциклопедия рассказывает: Юрий Алексеевич Гагарин родился 9 марта 1934 года в Клушино. Клиент Юрий Алексеевич Гагарин родился 8 июля 1986 года в Твери.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 95,
+          "end": 118,
+          "text": "Юрий Алексеевич Гагарин"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 127,
+          "end": 138,
+          "text": "8 июля 1986"
+        },
+        {
+          "category": "BIRTH_PLACE",
+          "start": 146,
+          "end": 151,
+          "text": "Твери"
+        }
+      ],
+      "intent": "Same famous name, public historical birth facts and private contemporary birth facts.",
+      "family": "birth_facts_context"
+    },
+    {
+      "id": "mixed-07",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "novel_author",
+        "client"
+      ],
+      "text": "В опубликованной рецензии автор Мирослав Ярославович Белозёров получил похвалу. Заявитель Мирослав Ярославович Белозёров просит реструктуризацию.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 90,
+          "end": 120,
+          "text": "Мирослав Ярославович Белозёров"
+        }
+      ],
+      "intent": "Unfamiliar names also need local public/private distinction.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-08",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "fiction",
+        "client"
+      ],
+      "text": "Роман «Анна Каренина» обсуждает клиент Анна Аркадьевна Каренина, телефон +7 907 555-44-33.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 39,
+          "end": 63,
+          "text": "Анна Аркадьевна Каренина"
+        },
+        {
+          "category": "PHONE",
+          "start": 73,
+          "end": 89,
+          "text": "+7 907 555-44-33"
+        }
+      ],
+      "intent": "A book title is public; a namesake attached to an actual customer record is private.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-09",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "office",
+        "personal_contact"
+      ],
+      "text": "Встреча в офисе банка. Клиент Руслан Эдуардович Ветров оставил личный email vetrov.personal@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 30,
+          "end": 54,
+          "text": "Руслан Эдуардович Ветров"
+        },
+        {
+          "category": "EMAIL",
+          "start": 76,
+          "end": 104,
+          "text": "vetrov.personal@example.test"
+        }
+      ],
+      "intent": "The word office does not exempt a person’s contact data.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-10",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "music",
+        "private_action"
+      ],
+      "text": "В программе концерта — произведения Сергея Васильевича Рахманинова. Сергей Васильевич Рахманинов сообщил банку свой телефон +7 908 222-11-00.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 68,
+          "end": 96,
+          "text": "Сергей Васильевич Рахманинов"
+        },
+        {
+          "category": "PHONE",
+          "start": 124,
+          "end": 140,
+          "text": "+7 908 222-11-00"
+        }
+      ],
+      "intent": "Banking action marks the second namesake as private without the literal word client.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-11",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "news",
+        "customer"
+      ],
+      "text": "В газетной статье спортсмен Артём Николаевич Завьялов выиграл турнир. В кредитной заявке Артём Николаевич Завьялов указал дату рождения 17.09.1993.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 89,
+          "end": 114,
+          "text": "Артём Николаевич Завьялов"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 136,
+          "end": 146,
+          "text": "17.09.1993"
+        }
+      ],
+      "intent": "An explicitly public sports report does not exempt a loan application.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-12",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "public_event",
+        "private_birth"
+      ],
+      "text": "Конференция памяти Сергея Павловича Королёва состоится 12.04.2026. Дата рождения клиента Сергей Павлович Королёв: 11.11.1980.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 89,
+          "end": 112,
+          "text": "Сергей Павлович Королёв"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 114,
+          "end": 124,
+          "text": "11.11.1980"
+        }
+      ],
+      "intent": "Public event date differs from a client date-of-birth field.",
+      "family": "birth_facts_context"
+    },
+    {
+      "id": "mixed-13",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "quotation",
+        "personal_message"
+      ],
+      "text": "Цитата из романа: «Евгений Онегин». Евгений Олегович Онегин написал мне номер карты 5555 5555 5555 4444.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 36,
+          "end": 59,
+          "text": "Евгений Олегович Онегин"
+        },
+        {
+          "category": "CARD",
+          "start": 84,
+          "end": 103,
+          "text": "5555 5555 5555 4444"
+        }
+      ],
+      "intent": "Quoted title is harmless; ordinary personal correspondence and card are private.",
+      "family": "structured_private_data"
+    },
+    {
+      "id": "mixed-14",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "institution",
+        "personal_name"
+      ],
+      "text": "Выставка проходит в музее имени Ивана Ивановича Шишкина. Заявление подписал Иван Иванович Шишкин.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 76,
+          "end": 96,
+          "text": "Иван Иванович Шишкин"
+        }
+      ],
+      "intent": "Memorial institution name and signature on a private application are separate uses.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-15",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "client",
+        "public_place"
+      ],
+      "text": "Клиент Ольга Петровна Сазонова живёт по адресу: г. Пермь, ул. Садовая, д. 2, кв. 9. На карте она ищет музей в Москве.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 30,
+          "text": "Ольга Петровна Сазонова"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 51,
+          "end": 56,
+          "text": "Пермь"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 62,
+          "end": 69,
+          "text": "Садовая"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 74,
+          "end": 75,
+          "text": "2"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 81,
+          "end": 82,
+          "text": "9"
+        }
+      ],
+      "intent": "Only residential address components are private; standalone public geography remains.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-16",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "public_claim",
+        "private_record"
+      ],
+      "text": "Для статьи о композиторе Петре Ильиче Чайковском использована открытая энциклопедия. Для перевода клиент Пётр Ильич Чайковский прислал карту 4111 1111 1111 1111.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 105,
+          "end": 126,
+          "text": "Пётр Ильич Чайковский"
+        },
+        {
+          "category": "CARD",
+          "start": 141,
+          "end": 160,
+          "text": "4111 1111 1111 1111"
+        }
+      ],
+      "intent": "Public source declaration in the first sentence cannot exempt banking credentials later.",
+      "family": "structured_private_data"
+    },
+    {
+      "id": "mixed-17",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "novel_name",
+        "public_work"
+      ],
+      "text": "Клиент Яромир Владиславович Добрянский рекомендует опубликованный роман писательницы Радмилы Анатольевны Снежиной «За горизонтом».",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 38,
+          "text": "Яромир Владиславович Добрянский"
+        }
+      ],
+      "intent": "Two unfamiliar names have different roles; public attribution alone does not exempt reader.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "mixed-18",
+      "tier": "required",
+      "tags": [
+        "mixed",
+        "public",
+        "client",
+        "paragraph"
+      ],
+      "text": "В учебнике: Иван Петрович Павлов изучал условные рефлексы.\n\nКлиент Иван Петрович Павлов; дата рождения 07.08.1978; место рождения Томск.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 67,
+          "end": 87,
+          "text": "Иван Петрович Павлов"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 103,
+          "end": 113,
+          "text": "07.08.1978"
+        },
+        {
+          "category": "BIRTH_PLACE",
+          "start": 130,
+          "end": 135,
+          "text": "Томск"
+        }
+      ],
+      "intent": "Paragraph boundary and explicit private fields separate the subjects.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-01",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "bare_name"
+      ],
+      "text": "Александр Сергеевич Пушкин.",
+      "gold": [],
+      "intent": "Chosen public historical reading. Bare identity alone could also be a living namesake; needs policy or entity linking.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-02",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "bare_name",
+        "novel_name"
+      ],
+      "text": "Яромир Владиславович Добрянский.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 0,
+          "end": 31,
+          "text": "Яромир Владиславович Добрянский"
+        }
+      ],
+      "intent": "Chosen conservative private reading. Bare unknown name provides no public/private intent.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-03",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "occupation"
+      ],
+      "text": "Поэт Арсений Вадимович Снежков родился 03.07.1988.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 5,
+          "end": 30,
+          "text": "Арсений Вадимович Снежков"
+        },
+        {
+          "category": "BIRTH_DATE",
+          "start": 39,
+          "end": 49,
+          "text": "03.07.1988"
+        }
+      ],
+      "intent": "Chosen conservative private reading: occupation alone does not prove published biography; unlike a known historical identity.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-04",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "public_business_contact",
+        "email"
+      ],
+      "text": "На официальном сайте музея опубликован общий email info@example.test для посетителей.",
+      "gold": [],
+      "intent": "Chosen non-personal organizational contact. Requires explicit policy for public business contacts, not a generic email exemption.",
+      "family": "contact_context"
+    },
+    {
+      "id": "diagnostic-05",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "public_business_contact",
+        "phone"
+      ],
+      "text": "Публичный телефон справочной музея: +7 800 222-33-44.",
+      "gold": [],
+      "intent": "Chosen organizational phone exemption. A phone regex alone cannot verify ownership.",
+      "family": "contact_context"
+    },
+    {
+      "id": "diagnostic-06",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "public_individual_contact"
+      ],
+      "text": "На сайте конференции указан рабочий email докладчика Нины Павловны Вересовой: n.veresova@example.test.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 53,
+          "end": 76,
+          "text": "Нины Павловны Вересовой"
+        },
+        {
+          "category": "EMAIL",
+          "start": 78,
+          "end": 101,
+          "text": "n.veresova@example.test"
+        }
+      ],
+      "intent": "Chosen privacy-preserving reading: public availability does not automatically remove identifiable individual contact protection.",
+      "family": "contact_context"
+    },
+    {
+      "id": "diagnostic-07",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "address",
+        "unbound"
+      ],
+      "text": "Адрес: г. Тула, ул. Советская, д. 19.",
+      "gold": [
+        {
+          "category": "ADDRESS",
+          "start": 10,
+          "end": 14,
+          "text": "Тула"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 20,
+          "end": 29,
+          "text": "Советская"
+        },
+        {
+          "category": "ADDRESS",
+          "start": 34,
+          "end": 36,
+          "text": "19"
+        }
+      ],
+      "intent": "Chosen conservative private reading; could be a home or institution without more context.",
+      "family": "address_context"
+    },
+    {
+      "id": "diagnostic-08",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "conversation"
+      ],
+      "text": "Мы с Иваном Петровым вчера обсуждали литературу.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 5,
+          "end": 20,
+          "text": "Иваном Петровым"
+        }
+      ],
+      "intent": "Chosen private acquaintance reading. A conversational mention may need masking under strict profile, unlike public author attribution.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-09",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "public_claim",
+        "phone"
+      ],
+      "text": "Это общедоступные данные: Андрей Сергеевич Лебедев, телефон +7 909 333-22-11.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 26,
+          "end": 50,
+          "text": "Андрей Сергеевич Лебедев"
+        },
+        {
+          "category": "PHONE",
+          "start": 60,
+          "end": 76,
+          "text": "+7 909 333-22-11"
+        }
+      ],
+      "intent": "Chosen conservative masking; unsupported public-data assertion does not establish public context.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-10",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "fiction_claim",
+        "record"
+      ],
+      "text": "Тестовый клиент Савелий Игоревич Зорин, паспорт 40 15 123456.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 16,
+          "end": 38,
+          "text": "Савелий Игоревич Зорин"
+        },
+        {
+          "category": "PASSPORT",
+          "start": 48,
+          "end": 60,
+          "text": "40 15 123456"
+        }
+      ],
+      "intent": "Chosen conservative masking: a claim of synthetic origin is not trusted in actual inputs.",
+      "family": "structured_private_data"
+    },
+    {
+      "id": "diagnostic-11",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "public_biography",
+        "modern"
+      ],
+      "text": "В общедоступной биографии актрисы Софии Львовны Берестовой указано: родилась 5 мая 1990 года в Туле.",
+      "gold": [],
+      "intent": "Chosen public biography interpretation; fictional modern identity and asserted publication cannot be independently verified offline.",
+      "family": "name_and_subject_context"
+    },
+    {
+      "id": "diagnostic-12",
+      "tier": "diagnostic",
+      "tags": [
+        "ambiguous",
+        "quoted_record"
+      ],
+      "text": "Из примера анкеты: «Клиент Клим Анатольевич Рябов, email klim@example.test».",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 27,
+          "end": 49,
+          "text": "Клим Анатольевич Рябов"
+        },
+        {
+          "category": "EMAIL",
+          "start": 57,
+          "end": 74,
+          "text": "klim@example.test"
+        }
+      ],
+      "intent": "Chosen conservative masking: quotation marks do not prove real identifying data is safe to disclose.",
+      "family": "name_and_subject_context"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+schema_version: 1
+scenarios:
+  - id: "support-basic"
+    consumer: "support_demo"
+    text: "Клиент Иван Иванович Петров, дата рождения 12 апреля 1990 года, паспорт серия 0318 номер 123456, email ivan.petrov@example.com, телефон +7 912 345-67-89, карта 4276 1234 5678 9012."
+  - id: "analytics-basic"
+    consumer: "analytics_demo"
+    text: "ИНН 7707083893, адрес г. Москва, ул. Тверская, д. 15, кв. 42."

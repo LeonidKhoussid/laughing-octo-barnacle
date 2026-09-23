@@ -1,0 +1,21 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PII_VAULT_BACKEND: memory
+      PII_WORKERS: "1"
+      PII_MAX_BODY_BYTES: "1048576"
+      PII_MAX_IN_FLIGHT: "64"
+      # Demo consumer API keys (placeholders — set real values in deployment).
+      SUPPORT_DEMO_API_KEY: ${SUPPORT_DEMO_API_KEY:-}
+      ANALYTICS_DEMO_API_KEY: ${ANALYTICS_DEMO_API_KEY:-}
+      COMBINATION_DEMO_API_KEY: ${COMBINATION_DEMO_API_KEY:-}
+      DEMO_CHAT_API_KEY: ${DEMO_CHAT_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

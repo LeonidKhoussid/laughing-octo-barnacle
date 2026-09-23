@@ -1,0 +1,59 @@
+schema_version: 1
+policy_version: "baseline-001"
+
+consumers:
+  autocheck:
+    enabled: true
+    namespace: "autocheck"
+    authentication: "competition_exception"
+    detect_types: "all_required"
+    default_action: "tokenize_full"
+    allow_unmask: true
+    allow_llm_egress: false
+
+  support_demo:
+    enabled: true
+    namespace: "support-demo"
+    authentication: "api_key"
+    api_key_env: "SUPPORT_DEMO_API_KEY"
+    detect_types: "all_required"
+    default_action: "tokenize_full"
+    allow_unmask: true
+    allow_llm_egress: false
+
+  analytics_demo:
+    enabled: true
+    namespace: "analytics-demo"
+    authentication: "api_key"
+    api_key_env: "ANALYTICS_DEMO_API_KEY"
+    detect_types: "all_required"
+    default_action: "opaque_token_full"
+    allow_unmask: false
+    allow_llm_egress: false
+
+  combination_demo:
+    enabled: true
+    namespace: "combination-demo"
+    authentication: "api_key"
+    api_key_env: "COMBINATION_DEMO_API_KEY"
+    synthetic_only: true
+    default_action: "tokenize_full"
+    allow_unmask: true
+    allow_llm_egress: false
+    combination_rules:
+      - id: "pin_requires_related_card"
+        target_type: "PIN"
+        requires_type: "CARD"
+        relation_scope: "same_record"
+        action_if_present: "tokenize_full"
+        action_if_absent: "keep"
+
+  demo_chat:
+    enabled: true
+    namespace: "demo-chat"
+    authentication: "api_key"
+    api_key_env: "DEMO_CHAT_API_KEY"
+    detect_types: "all_required"
+    default_action: "tokenize_full"
+    allow_unmask: true
+    allow_llm_egress: true

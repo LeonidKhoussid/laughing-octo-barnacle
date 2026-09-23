@@ -1,0 +1,629 @@
+{
+  "schema_version": 1,
+  "name": "semantic_final_holdout_32",
+  "language": "ru",
+  "provenance": "Independently authored after prior development and regression probes. No model or application was run on these examples before freezing this file. No existing gold cases were read; only structural schema and offset convention were inspected. All private records and contact details are synthetic.",
+  "purpose": "Final unseen contextual masking check, including public attribution/biography/institutional contact, private records and mixed mentions. This is a small designed set, not representative population accuracy.",
+  "offsets": "Unicode code-point [start,end) offsets into unchanged text.",
+  "annotation_policy": [
+    "Preserve explicit public biographical, scientific, cultural and fictional references.",
+    "Preserve clearly identified public institutional addresses and published operational contacts.",
+    "Protect private persons, client records and personal contact data even for famous-looking names or leaked records.",
+    "Evaluate each mention locally; a public reference elsewhere does not exempt a private mention.",
+    "Gold spans are exact original personal values; their surrounding labels and punctuation remain unchanged.",
+    "No prediction-informed changes to labels are allowed after this fixture is frozen."
+  ],
+  "case_count": 32,
+  "required_count": 32,
+  "diagnostic_count": 0,
+  "cases": [
+    {
+      "id": "final-01",
+      "tier": "required",
+      "tags": [
+        "public_science",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В учебнике генетики описаны опыты ботаника Грегора Менделя с горохом.",
+      "gold": [],
+      "intent": "Учебное изложение научного результата; имя учёного сохраняется.",
+      "family": "public_science"
+    },
+    {
+      "id": "final-02",
+      "tier": "required",
+      "tags": [
+        "public_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В статье по информатике приведён алгоритм, предложенный Эдсгером Дейкстрой.",
+      "gold": [],
+      "intent": "Атрибуция опубликованного алгоритма сохраняется.",
+      "family": "public_attribution"
+    },
+    {
+      "id": "final-03",
+      "tier": "required",
+      "tags": [
+        "public_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В литературной энциклопедии Жюль Верн указан как автор романа «Таинственный остров».",
+      "gold": [],
+      "intent": "Энциклопедическая атрибуция произведения сохраняется.",
+      "family": "public_attribution"
+    },
+    {
+      "id": "final-04",
+      "tier": "required",
+      "tags": [
+        "public_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Роман «451 градус по Фаренгейту» написал писатель Рэй Брэдбери.",
+      "gold": [],
+      "intent": "Имя автора в библиографическом утверждении сохраняется.",
+      "family": "public_attribution"
+    },
+    {
+      "id": "final-05",
+      "tier": "required",
+      "tags": [
+        "public_science",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "На уроке астрономии обсуждали открытия Иоганна Кеплера.",
+      "gold": [],
+      "intent": "Упоминание учёного в истории науки сохраняется.",
+      "family": "public_science"
+    },
+    {
+      "id": "final-06",
+      "tier": "required",
+      "tags": [
+        "public_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В каталоге музея картина «Девочка с персиками» подписана именем художника Валентина Серова.",
+      "gold": [],
+      "intent": "Музейная атрибуция произведения сохраняется.",
+      "family": "public_attribution"
+    },
+    {
+      "id": "final-07",
+      "tier": "required",
+      "tags": [
+        "public_biography",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В биографии Михаила Булгакова рассказывается о создании романа «Белая гвардия».",
+      "gold": [],
+      "intent": "Общедоступная творческая биография сохраняется.",
+      "family": "public_biography"
+    },
+    {
+      "id": "final-08",
+      "tier": "required",
+      "tags": [
+        "public_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Пьесу «Пигмалион» написал драматург Бернард Шоу.",
+      "gold": [],
+      "intent": "Атрибуция опубликованной пьесы сохраняется.",
+      "family": "public_attribution"
+    },
+    {
+      "id": "final-09",
+      "tier": "required",
+      "tags": [
+        "public_fiction",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В вымышленном мире романа капитан Немо командует подводной лодкой «Наутилус».",
+      "gold": [],
+      "intent": "Имя вымышленного персонажа сохраняется.",
+      "family": "public_fiction"
+    },
+    {
+      "id": "final-10",
+      "tier": "required",
+      "tags": [
+        "public_science",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В справочнике говорится, что математик Ада Лавлейс работала над описанием аналитической машины.",
+      "gold": [],
+      "intent": "Справочная история науки сохраняется.",
+      "family": "public_science"
+    },
+    {
+      "id": "final-11",
+      "tier": "required",
+      "tags": [
+        "public_institution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "На официальном сайте библиотеки опубликован её рабочий адрес: г. Тула, ул. Советская, д. 12.",
+      "gold": [],
+      "intent": "Явно указанный рабочий адрес публичного учреждения сохраняется.",
+      "family": "public_institution"
+    },
+    {
+      "id": "final-12",
+      "tier": "required",
+      "tags": [
+        "public_contact",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "На официальном сайте музея указан телефон кассы: +7 495 731-26-84.",
+      "gold": [],
+      "intent": "Рабочий телефон организации, явно опубликованный для посетителей, сохраняется.",
+      "family": "public_contact"
+    },
+    {
+      "id": "final-13",
+      "tier": "required",
+      "tags": [
+        "public_biography",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В энциклопедии: композитор Дмитрий Шостакович родился 25 сентября 1906 года.",
+      "gold": [],
+      "intent": "Имя и дата рождения в энциклопедической биографии сохраняются.",
+      "family": "public_biography"
+    },
+    {
+      "id": "final-14",
+      "tier": "required",
+      "tags": [
+        "public_biography",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В биографическом справочнике написано: композитор Эдвард Григ родился в Бергене.",
+      "gold": [],
+      "intent": "Имя и место рождения в справочной биографии сохраняются.",
+      "family": "public_biography"
+    },
+    {
+      "id": "final-15",
+      "tier": "required",
+      "tags": [
+        "private_record",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Получатель перевода Ростислав Валерьевич Мещеряков просит изменить телефон.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 20,
+          "end": 50,
+          "text": "Ростислав Валерьевич Мещеряков"
+        }
+      ],
+      "intent": "Имя получателя из частной банковской операции защищается.",
+      "family": "private_record"
+    },
+    {
+      "id": "final-16",
+      "tier": "required",
+      "tags": [
+        "private_record",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Паспортные данные клиентки: Полина Евгеньевна Зорина, паспорт 46 18 731294.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 28,
+          "end": 52,
+          "text": "Полина Евгеньевна Зорина"
+        },
+        {
+          "category": "PASSPORT",
+          "start": 62,
+          "end": 74,
+          "text": "46 18 731294"
+        }
+      ],
+      "intent": "Имя и паспорт из клиентской записи защищаются полностью.",
+      "family": "private_record"
+    },
+    {
+      "id": "final-17",
+      "tier": "required",
+      "tags": [
+        "private_correspondence",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Мой сосед Тимофей Леонидович Корнеев прислал сообщение.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 10,
+          "end": 36,
+          "text": "Тимофей Леонидович Корнеев"
+        }
+      ],
+      "intent": "Личный знакомый в переписке защищается.",
+      "family": "private_correspondence"
+    },
+    {
+      "id": "final-18",
+      "tier": "required",
+      "tags": [
+        "private_contact",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Личные контакты заказчика Фадей Петрович Куликов: f.kulikov@example.org.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 26,
+          "end": 48,
+          "text": "Фадей Петрович Куликов"
+        },
+        {
+          "category": "EMAIL",
+          "start": 50,
+          "end": 71,
+          "text": "f.kulikov@example.org"
+        }
+      ],
+      "intent": "Имя и личная почта заказчика защищаются.",
+      "family": "private_contact"
+    },
+    {
+      "id": "final-19",
+      "tier": "required",
+      "tags": [
+        "private_correspondence",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Мой врач Мирон Алексеевич Громов написал мне по поводу обследования.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 9,
+          "end": 32,
+          "text": "Мирон Алексеевич Громов"
+        }
+      ],
+      "intent": "Профессия не делает частную медицинскую переписку публичной.",
+      "family": "private_correspondence"
+    },
+    {
+      "id": "final-20",
+      "tier": "required",
+      "tags": [
+        "private_namesake",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Паспорт клиента Жюль Верн: 46 18 731295.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 16,
+          "end": 25,
+          "text": "Жюль Верн"
+        },
+        {
+          "category": "PASSPORT",
+          "start": 27,
+          "end": 39,
+          "text": "46 18 731295"
+        }
+      ],
+      "intent": "Имя, совпадающее с известным автором, в паспортной клиентской записи защищается.",
+      "family": "private_namesake"
+    },
+    {
+      "id": "final-21",
+      "tier": "required",
+      "tags": [
+        "private_namesake",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Держатель договора Ада Лавлейс попросила изменить номер телефона на +7 921 684-37-52.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 19,
+          "end": 30,
+          "text": "Ада Лавлейс"
+        },
+        {
+          "category": "PHONE",
+          "start": 68,
+          "end": 84,
+          "text": "+7 921 684-37-52"
+        }
+      ],
+      "intent": "Частный договор и изменение личного телефона защищаются независимо от известности имени.",
+      "family": "private_namesake"
+    },
+    {
+      "id": "final-22",
+      "tier": "required",
+      "tags": [
+        "private_record",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В анкете заёмщика указано ФИО: Викентий Глебович Туманов.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 31,
+          "end": 56,
+          "text": "Викентий Глебович Туманов"
+        }
+      ],
+      "intent": "Полное имя из анкеты заёмщика защищается.",
+      "family": "private_record"
+    },
+    {
+      "id": "final-23",
+      "tier": "required",
+      "tags": [
+        "private_correspondence",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Мне написала Габриэла Мистраль. Её личная почта: g.mistral@example.net.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 13,
+          "end": 30,
+          "text": "Габриэла Мистраль"
+        },
+        {
+          "category": "EMAIL",
+          "start": 49,
+          "end": 70,
+          "text": "g.mistral@example.net"
+        }
+      ],
+      "intent": "Личное обращение и почта остаются частными, даже если имя известно.",
+      "family": "private_correspondence"
+    },
+    {
+      "id": "final-24",
+      "tier": "required",
+      "tags": [
+        "private_leak",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Архив утечки содержит запись: получатель Феликс Семёнович Барсуков, email felix.barsukov@example.org.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 41,
+          "end": 66,
+          "text": "Феликс Семёнович Барсуков"
+        },
+        {
+          "category": "EMAIL",
+          "start": 74,
+          "end": 100,
+          "text": "felix.barsukov@example.org"
+        }
+      ],
+      "intent": "Упоминание утечки не делает частные данные допустимыми для раскрытия.",
+      "family": "private_leak"
+    },
+    {
+      "id": "final-25",
+      "tier": "required",
+      "tags": [
+        "mixed_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Лаборант Юлиан Викторович Зотов готовит доклад об опытах Грегора Менделя.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 9,
+          "end": 31,
+          "text": "Юлиан Викторович Зотов"
+        }
+      ],
+      "intent": "Имя конкретного сотрудника защищается; историческая научная атрибуция остаётся.",
+      "family": "mixed_attribution"
+    },
+    {
+      "id": "final-26",
+      "tier": "required",
+      "tags": [
+        "mixed_attribution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Клиент Варвара Денисовна Нестерова читает роман Рэя Брэдбери; её email: v.nesterova@example.com.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 7,
+          "end": 34,
+          "text": "Варвара Денисовна Нестерова"
+        },
+        {
+          "category": "EMAIL",
+          "start": 72,
+          "end": 95,
+          "text": "v.nesterova@example.com"
+        }
+      ],
+      "intent": "Данные клиентки защищаются; имя автора книги сохраняется.",
+      "family": "mixed_attribution"
+    },
+    {
+      "id": "final-27",
+      "tier": "required",
+      "tags": [
+        "mixed_record",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Перевод для автора заявки Станислав Олегович Колосов задержан. В назначении платежа указана книга Жюля Верна «Таинственный остров».",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 26,
+          "end": 52,
+          "text": "Станислав Олегович Колосов"
+        }
+      ],
+      "intent": "Автор заявки является клиентом, а автор книги упомянут публично.",
+      "family": "mixed_record"
+    },
+    {
+      "id": "final-28",
+      "tier": "required",
+      "tags": [
+        "mixed_contact",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В докладе об алгоритмах Эдсгера Дейкстры организатор указал личный телефон участника Георгия Фёдоровича Рубцова: +7 903 624-71-58.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 85,
+          "end": 111,
+          "text": "Георгия Фёдоровича Рубцова"
+        },
+        {
+          "category": "PHONE",
+          "start": 113,
+          "end": 129,
+          "text": "+7 903 624-71-58"
+        }
+      ],
+      "intent": "Научная атрибуция сохраняется; участник и его личный контакт защищаются.",
+      "family": "mixed_contact"
+    },
+    {
+      "id": "final-29",
+      "tier": "required",
+      "tags": [
+        "mixed_institution",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Библиотека находится по адресу: г. Вологда, ул. Мира, д. 10. Читатель Клавдий Матвеевич Орехов оставил почту klavdiy.orekhov@example.net.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 70,
+          "end": 94,
+          "text": "Клавдий Матвеевич Орехов"
+        },
+        {
+          "category": "EMAIL",
+          "start": 109,
+          "end": 136,
+          "text": "klavdiy.orekhov@example.net"
+        }
+      ],
+      "intent": "Адрес учреждения сохраняется; данные читателя защищаются.",
+      "family": "mixed_institution"
+    },
+    {
+      "id": "final-30",
+      "tier": "required",
+      "tags": [
+        "mixed_record",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "В статье рассказывается о карьере художника Валентина Серова. Подписчик Анатолий Яковлевич Белозёров сообщил паспорт 46 18 731296.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 72,
+          "end": 100,
+          "text": "Анатолий Яковлевич Белозёров"
+        },
+        {
+          "category": "PASSPORT",
+          "start": 117,
+          "end": 129,
+          "text": "46 18 731296"
+        }
+      ],
+      "intent": "Публичное упоминание художника не освобождает личную запись подписчика от защиты.",
+      "family": "mixed_record"
+    },
+    {
+      "id": "final-31",
+      "tier": "required",
+      "tags": [
+        "mixed_contact",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "На странице театра опубликован рабочий email кассы tickets@example.org. Покупатель Эмилия Кирилловна Савина просит ответить на её личный адрес e.savina@example.net.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 83,
+          "end": 107,
+          "text": "Эмилия Кирилловна Савина"
+        },
+        {
+          "category": "EMAIL",
+          "start": 143,
+          "end": 163,
+          "text": "e.savina@example.net"
+        }
+      ],
+      "intent": "Рабочая публичная почта кассы сохраняется; личная почта покупательницы и имя защищаются.",
+      "family": "mixed_contact"
+    },
+    {
+      "id": "final-32",
+      "tier": "required",
+      "tags": [
+        "mixed_same_name",
+        "independently_authored",
+        "synthetic_context"
+      ],
+      "text": "Драматург Бернард Шоу написал «Пигмалион». Мой знакомый Бернард Шоу прислал личное сообщение.",
+      "gold": [
+        {
+          "category": "FULL_NAME",
+          "start": 56,
+          "end": 67,
+          "text": "Бернард Шоу"
+        }
+      ],
+      "intent": "Одинаковая строка имени получает разные решения по локальному контексту каждого упоминания.",
+      "family": "mixed_same_name"
+    }
+  ]
+}

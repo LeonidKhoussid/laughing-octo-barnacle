@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AlfaGen — защита персональных данных</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">AlfaGen</div>
+      <nav class="nav" aria-label="Основная навигация">
+        <button class="nav-item active" data-view="workspace" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">▤</span>
+          <span>Обработка текста</span>
+        </button>
+        <button class="nav-item" data-view="apps">
+          <span class="nav-icon" aria-hidden="true">◈</span>
+          <span>Приложения</span>
+        </button>
+        <button class="nav-item" data-view="journal">
+          <span class="nav-icon" aria-hidden="true">☰</span>
+          <span>Журнал</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="badge badge-muted" id="policy-version">—</span>
+      </div>
+    </aside>
+
+    <!-- Main column -->
+    <div class="main">
+      <!-- Header -->
+      <header class="header">
+        <h1 id="view-title">Обработка текста</h1>
+        <div class="header-controls">
+          <label class="app-label" for="consumer">Приложение</label>
+          <div class="app-select-wrap">
+            <select id="consumer" aria-label="Выбор приложения"></select>
+            <button class="icon-btn" id="btn-settings" aria-label="Настройки приложения" title="Настройки приложения">⚙</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- View: Workspace -->
+      <section class="view active" id="view-workspace">
+        <div class="workspace">
+          <div class="conversation-panel">
+            <div class="conversation" id="conversation" aria-live="polite">
+              <div class="empty-state" id="empty-state">
+                <p>Введите текст с персональными данными и нажмите «Обработать текст».</p>
+                <p class="hint">Данные обрабатываются локально; внешняя модель не вызывается (демонстрационный провайдер).</p>
+              </div>
+            </div>
+
+            <div class="composer">
+              <label class="sr-only" for="text-input">Текст запроса</label>
+              <textarea id="text-input" rows="3" placeholder="Введите текст с персональными данными…"></textarea>
+              <div class="composer-actions">
+                <div class="composer-left">
+                  <button class="ghost-btn" id="btn-example">Вставить пример</button>
+                  <button class="ghost-btn" id="btn-clear">Очистить</button>
+                  <span class="input-size" id="input-size">0 символов</span>
+                </div>
+                <div class="composer-right">
+                  <span class="shortcut-hint">Ctrl/⌘+Enter</span>
+                  <button class="primary-btn" id="btn-mask">Обработать текст</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="result-card">
+            <h2>Результат проверки</h2>
+            <div class="result-row">
+              <span class="result-label">Найдено фрагментов</span>
+              <span class="result-value" id="result-count">—</span>
+            </div>
+            <div class="result-chips" id="result-chips"></div>
+            <div class="result-divider"></div>
+            <div class="result-row">
+              <span class="result-label">Время обработки</span>
+              <span class="result-value" id="result-time">—</span>
+            </div>
+            <div class="result-row">
+              <span class="result-label">Статус</span>
+              <span class="result-value" id="result-status">—</span>
+            </div>
+            <details class="result-details">
+              <summary>Подробнее</summary>
+              <div class="result-detail-line">Политика: <span id="result-policy">—</span></div>
+              <div class="result-detail-line">Запрос: <span id="result-request-id">—</span></div>
+              <div class="result-detail-line">Режим маски: <span id="result-mask-mode">—</span></div>
+              <div class="result-detail-line">Round-trip: <span id="result-roundtrip">—</span></div>
+            </details>
+          </div>
+        </div>
+
+        <!-- Trust Lab (secondary tab) -->
+        <div class="trust-lab">
+          <h2>Лаборатория доверия</h2>
+          <p class="hint">Реальные проверки на общем engine: новый текст, сравнение версий правил, инъекция отказа. Показываются настоящие результаты, включая провалы.</p>
+          <div class="trust-tabs">
+            <button class="trust-tab active" data-trust="a">Проверить текст</button>
+            <button class="trust-tab" data-trust="b">Сравнить политики</button>
+            <button class="trust-tab" data-trust="c">Проверить отказ</button>
+            <button class="trust-tab" data-trust="report">Паспорт проверки</button>
+          </div>
+
+          <div class="trust-panel active" id="trust-a">
+            <textarea id="trust-a-text" rows="3" placeholder="Введите текст для проверки…"></textarea>
+            <div class="trust-row">
+              <label><input type="checkbox" id="trust-a-labeled"> Синтетический размеченный шаблон</label>
+            </div>
+            <div class="actions">
+              <button class="primary-btn" id="btn-trust-a">Проверить</button>
+              <button class="ghost-btn" id="btn-trust-a-variations">Вариации (8–12)</button>
+            </div>
+            <pre id="trust-a-output" class="output">—</pre>
+          </div>
+
+          <div class="trust-panel" id="trust-b">
+            <div class="trust-row">
+              <label for="trust-b-consumer">Потребитель</label>
+              <select id="trust-b-consumer"></select>
+            </div>
+            <div class="trust-row">
+              <label for="trust-b-action">Тип маски (кандидат)</label>
+              <select id="trust-b-action">
+                <option value="">(без изменения)</option>
+                <option value="tokenize_full">tokenize_full</option>
+                <option value="opaque_token_full">opaque_token_full</option>
+              </select>
+            </div>
+            <div class="trust-row">
+              <label><input type="checkbox" id="trust-b-add-detector"> Добавить простой detector (синтетический ID)</label>
+            </div>
+            <div class="actions">
+              <button class="primary-btn" id="btn-trust-b">Сравнить версии</button>
+            </div>
+            <pre id="trust-b-output" class="output">—</pre>
+          </div>
+
+          <div class="trust-panel" id="trust-c">
+            <div class="trust-row">
+              <label for="trust-c-fault">Компонент</label>
+              <select id="trust-c-fault">
+                <option value="detector">Обязательный detector</option>
+                <option value="vault">Vault</option>
+              </select>
+            </div>
+            <div class="trust-row">
+              <label for="trust-c-admin">Admin-ключ</label>
+              <input type="password" id="trust-c-admin" placeholder="PII_TRUST_LAB_ADMIN_KEY">
+            </div>
+            <div class="actions">
+              <button class="primary-btn" id="btn-trust-c">Проверить отказ</button>
+              <button class="ghost-btn" id="btn-trust-c-recover">Восстановить</button>
+            </div>
+            <pre id="trust-c-output" class="output">—</pre>
+          </div>
+
+          <div class="trust-panel" id="trust-report">
+            <div class="actions">
+              <button class="primary-btn" id="btn-trust-report">Сформировать паспорт</button>
+            </div>
+            <pre id="trust-report-output" class="output">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- View: Apps -->
+      <section class="view" id="view-apps">
+        <div class="apps-panel">
+          <h2>Приложения</h2>
+          <p class="hint">Настройки потребителей. Изменения применяются через конфигурацию <code>configs/consumers.yaml</code> и документированный reload.</p>
+          <div id="apps-list" class="apps-list"></div>
+        </div>
+      </section>
+
+      <!-- View: Journal -->
+      <section class="view" id="view-journal">
+        <div class="journal-panel">
+          <h2>Журнал</h2>
+          <p class="hint">Безопасные метаданные запросов. Исходные тексты, восстановленные значения и ключи не сохраняются.</p>
+          <div class="metrics-row">
+            <div class="metric"><span class="metric-label">Latency (p50)</span><span class="metric-value" id="metric-latency">—</span></div>
+            <div class="metric"><span class="metric-label">RPS</span><span class="metric-value" id="metric-rps">—</span></div>
+            <div class="metric"><span class="metric-label">TPS</span><span class="metric-value" id="metric-tps">—</span></div>
+          </div>
+          <div id="journal-list" class="journal-list">
+            <div class="empty-state"><p>Журнал пуст. Выполните обработку текста, чтобы увидеть безопасные записи.</p></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

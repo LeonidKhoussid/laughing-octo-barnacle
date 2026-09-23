@@ -1,0 +1,69 @@
+schema_version: 1
+detector_manifest_version: "semantic-001"
+
+detectors:
+  - id: "semantic_context"
+    type: "contextual"
+    model_dir: "models/semantic"
+    enabled: true
+  - id: "email"
+    type: "EMAIL"
+    enabled: true
+  - id: "phone"
+    type: "PHONE"
+    enabled: true
+  - id: "card"
+    type: "CARD"
+    enabled: true
+  - id: "passport"
+    type: "PASSPORT"
+    enabled: true
+  - id: "full_name"
+    type: "FULL_NAME"
+    enabled: true
+  - id: "birth_date"
+    type: "BIRTH_DATE"
+    enabled: true
+  - id: "inn"
+    type: "INN"
+    enabled: true
+  - id: "department_code"
+    type: "DEPARTMENT_CODE"
+    enabled: true
+  - id: "address"
+    type: "ADDRESS"
+    enabled: true
+  - id: "birth_place"
+    type: "BIRTH_PLACE"
+    enabled: true
+  - id: "citizenship"
+    type: "CITIZENSHIP"
+    enabled: true
+  - id: "passport_issuer"
+    type: "PASSPORT_ISSUER"
+    enabled: true
+  - id: "passport_issue_date"
+    type: "PASSPORT_ISSUE_DATE"
+    enabled: true
+  - id: "driver_license"
+    type: "DRIVER_LICENSE"
+    enabled: true
+  - id: "cvv"
+    type: "CVV"
+    enabled: true
+  - id: "pin"
+    type: "PIN"
+    enabled: true
+  - id: "cardholder_name"
+    type: "CARDHOLDER_NAME"
+    enabled: true
+  # Config-driven regex detector (C4): a new data type defined purely in config,
+  # no core rewrite. Disabled by default so it does not affect the 17 required
+  # categories. Enable it to demonstrate extensibility.
+  - id: "account_number"
+    type: "regex"
+    category: "ACCOUNT_NUMBER"
+    pattern: "\\b\\d{20}\\b"
+    context: "(?i)(счёт|счет|account)"
+    context_window: 40
+    enabled: false

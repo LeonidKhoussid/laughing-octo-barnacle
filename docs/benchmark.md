@@ -1,0 +1,400 @@
+# Current performance verification
+
+**The 1000 RPS target is not demonstrated.** The tables below labelled G3/G5/G8
+are historical reports from before the local RuBERT and mDeBERTa pipeline was
+enabled. They do not measure the current service and must not be used as its
+capacity or latency claim. Historical clean-install/container results also do
+not verify the current package. Current model quality and sequential checks
+are described in [semantic-check.md](semantic-check.md).
+
+## Current HTTP benchmark
+
+Use `scripts/benchmark_process.py` against a separately started server with the
+normal semantic detector enabled. Use a separate load-generator machine for
+server-capacity measurements; co-located runs share CPU and memory. For example:
+
+```bash
+.venv/bin/python scripts/benchmark_process.py --base-url http://127.0.0.1:8012 --mode closed --duration 30 --concurrency 8 --mix private,public,mixed --output artifacts/process-closed.json
+.venv/bin/python scripts/benchmark_process.py --base-url http://127.0.0.1:8012 --mode open --duration 30 --rps 1000 --concurrency 128 --mix private,public,mixed --output artifacts/process-open-1000.json
+```
+
+These are reproduction commands, not evidence that the target passed.
+
+- Closed mode measures completed work at fixed concurrency. Open mode schedules
+  actual HTTP request slots independently of response completion. `--rps 1000`
+  is a requested arrival rate, not a successful-throughput claim.
+- Client concurrency is bounded. Late generator slots and slots dropped at the
+  client capacity limit are reported separately from HTTP requests and errors.
+- Fresh masks use unique synthetic text and `payload_id`; there are no HTTP
+  retries or reused cached masks. `--restore-every 1` offers ready restorations
+  on alternate slots and records the actual mask/restore mix.
+- The oracle checks complete replacement of the designated private fragments,
+  exact preservation of all other text, and exact restoration. Malformed 200
+  responses and wrong output are errors, not successful RPS. This narrow
+  synthetic oracle is not representative accuracy measurement.
+- Successful completions within the measurement window and completions during
+  drain are separate. Latencies of successful responses exclude fast HTTP
+  failures; scheduled latency also includes generator dispatch delay.
+- Reports include request mix/lengths, generator hardware, local model/config
+  hashes and optional `--server-metadata` JSON. Local hashes are not proof of
+  the remote server configuration; record and verify that server separately.
+
+The older `loadtest.py --profile process` and `process_sustained` profiles are
+**legacy sequential contract diagnostics**. They ignore `--workers` and have
+one request in flight. Their `--rps` caps mask-loop starts, with extra restore
+requests, so it is not independent offered HTTP load. They now report
+`offered_rps: null`, `load_model: legacy_sequential`, and the configured mask
+start ceiling separately. They cannot establish a 1000 RPS capacity.
+
+---
+
+# Historical independent quality benchmark (G3, before BERT)
+
+This document describes the independent quality evaluation of the AlfaGen PII
+Gateway against labeled synthetic fixtures. It is a **local diagnostic** tool,
+not the organizers' official scoring formula (see master prompt section 16.2).
+
+## 1. Methodology
+
+We measure detection quality on an **independent labeled synthetic corpus** whose
+ground truth is produced from templates, **not** from detector predictions
+(master prompt 16.1, R62). The oracle is therefore independent of the detector
+logic.
+
+Pipeline:
+
+1. `scripts/generate_fixtures.py` — builds the labeled corpus and writes
+   `artifacts/fixtures.json`.
+2. `scripts/evaluate.py` — runs the engine on every example, computes per-category
+   and overall metrics, and writes `artifacts/evaluation_report.json`.
+
+A fixed seed (`20260922`) makes the corpus reproducible.
+
+## 2. Fixture generator
+
+`scripts/generate_fixtures.py` produces examples for all 17 categories. Each
+example carries:
+
+- `text`: the synthetic input string.
+- `gold_spans`: list of `{start, end, category}` — the TRUE sensitive spans in
+  Unicode code-point coordinates.
+- `category`: the primary category under test.
+- `scenario`: a short label (`positive`, `negative`, `case_variant`, `nonspace`,
+  `overlap`, `bare_value`, `typo_checksum`, `historical_person`,
+  `office_vs_residential`).
+
+The corpus includes:
+
+- **Positive** examples per category with several variants (case, spaces/NBSP,
+  dashes, words vs digits, Cyrillic/Latin where relevant).
+- **Negative** examples that must NOT be masked (ordinary dates, ordinary country
+  mentions, "забыл PIN-код", port/year/order codes, trading organizations,
+  historical person "Пушкин" in non-client context, office address).
+- **Context disambiguation** (birth date vs issue date vs ordinary date in one text).
+- **Overlap** (multiple PII types in one text; FULL_NAME vs CARDHOLDER_NAME).
+- **Bare-value** examples where the type is reasonably determinable.
+- **Explicitly-signed values with typos / invalid checksum** (must still be masked).
+- **Historical person vs client namesake**; **office vs residential address**.
+
+All values are synthetic; no real PII is used.
+
+## 3. Metrics (LOCAL DIAGNOSTIC — not the official formula)
+
+These formulas are our diagnostic tool (master prompt 16.2), **not** the
+documented hackathon formula. Empty denominators are handled explicitly.
+
+Let `G` be the set of gold sensitive character positions and `P` the set of
+actually-masked character positions.
+
+```
+concealment_recall      = |G ∩ P| / |G|
+span_character_precision = |G ∩ P| / |P|
+non_pii_overmask_rate    = |P \ G| / |all_positions \ G|
+```
+
+Additional metrics:
+
+- **Entity precision / recall / F1** at exact span match, per category and
+  macro-aggregated.
+- **Boundary accuracy**: fraction of predicted spans that exactly match a gold span.
+- **Round-trip accuracy**: `unmask(mask(x)) == x` for every positive example.
+- **Fully / partially missed** sensitive entities.
+- **Fraction of requests** with at least one missed labeled sensitive fragment.
+
+## 4. Per-category results
+
+Run: `.venv/bin/python scripts/evaluate.py` (seed `20260922`, 82 examples).
+
+| Category             | P     | R     | F1    | Conceal | SpanP |
+|----------------------|-------|-------|-------|---------|-------|
+| FULL_NAME            | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| BIRTH_DATE           | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| BIRTH_PLACE          | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| PASSPORT             | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| CITIZENSHIP          | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| PASSPORT_ISSUER      | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| DEPARTMENT_CODE      | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| PASSPORT_ISSUE_DATE  | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| DRIVER_LICENSE       | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| ADDRESS              | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| EMAIL                | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| PHONE                | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| INN                  | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| CARD                 | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| CVV                  | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| PIN                  | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| CARDHOLDER_NAME      | 1.000 | 1.000 | 1.000 | 1.000   | 1.000 |
+| **MACRO**            | 1.000 | 1.000 | 1.000 | —       | —     |
+
+Global character-level (local diagnostic):
+
+- concealment_recall = 1.000
+- span_character_precision = 1.000
+- non_pii_overmask_rate = 0.000
+
+Round-trip accuracy: 82/82 = 1.000. Fully missed entities: 0, partially missed: 0.
+Requests with ≥1 missed fragment: 0/82. Boundary accuracy: 77/77 = 1.000.
+
+## 5. Detector bugs found and fixed
+
+During the independent evaluation the following detector bugs were found and
+fixed (each with a regression test in `tests/unit/test_detectors.py`):
+
+1. **FULL_NAME** — the sensitive span included the service word "Клиент"
+   (violates R13). Fixed to start at the actual name. Also added support for
+   all-uppercase names (`ИВАН ИВАНОВИЧ ПЕТРОВ`) and stopped claiming names in
+   cardholder context (those belong to CARDHOLDER_NAME).
+2. **BIRTH_DATE** — the wide context window marked the passport issue date as a
+   birth date in "дата рождения 12.04.1990, паспорт выдан 15.03.2015". Fixed to
+   only fire on the nearest date to a birth context.
+3. **PASSPORT** — the series regex required 4 consecutive digits, missing a
+   series with a space ("45 12"). Fixed to allow a space/dash in the series.
+4. **PASSPORT_ISSUER** — the "г." abbreviation truncated the issuing authority
+   name ("УФМС России по г. Москве" → "УФМС России по г"). Fixed to treat
+   abbreviations as tokens.
+5. **PASSPORT_ISSUE_DATE** — an ordinary date with neutral context ("встреча
+   20.06.2020") was misclassified as an issue date. Added a neutral-context guard.
+6. **ADDRESS** — one "офис" marker suppressed a later client address in the same
+   text (violates master prompt 9.1). Fixed so a personal-address marker between
+   the office marker and the component overrides the office classification.
+7. **BIRTH_PLACE** — "Поэт ... Пушкин родился в Москве" was masked as a birth
+   place (historical context, violates R15). Added a historical-context guard.
+
+## 6. Historical detector limitations
+
+The following describes the earlier detector-only build; the current NER/context
+pipeline and its limitations are documented in `semantic-check.md`.
+
+- The corpus is synthetic and template-based; it does not cover every real-world
+  phrasing. A perfect score here does **not** prove safety on arbitrary input.
+- The metrics are **local diagnostic** and are not the organizers' official
+  formula (master prompt 16.2).
+- Historical-person detection for BIRTH_PLACE relies on a profession-word guard
+  and may not cover all historical contexts.
+- FULL_NAME is a heuristic (dictionary + context), not a full NER; uncommon names
+  or unusual grammar may be missed.
+- The ADDRESS detector handles a fixed set of component patterns; complex
+  addresses (buildings, fractions, "8 Марта" streets) are only partially covered.
+
+---
+
+# Historical G5 — Safe Telemetry, 100k Handling, and Load Testing
+
+This section documents the G5 work: safe logs/metrics/limits, 100k-token
+handling, and the reproducible local load-testing tool. All numbers below are
+**LOCAL DIAGNOSTIC** measurements on this machine, **not** the organizers'
+official scoring formula (master prompt 14.5, 16.2).
+
+## 1. Safe telemetry (logs / metrics / limits)
+
+- **SafeLogger** (`app/observability/logs.py`) logs only an allowlist of fields
+  (`request_id` server-generated, `operation`, `consumer`, `policy_version`,
+  `stage`, `detected_counts`, `degraded`, `result`). It never logs original or
+  masked body, vault mappings, keys, auth headers, or raw `payload_id`.
+- **Metrics** (`app/observability/metrics.py`) uses bounded-cardinality label
+  enums (`operation`, `status`, `type`, `stage`, `reason`, `provider`,
+  `result`). Any label value outside the enum is dropped, so a stray caller
+  cannot inflate cardinality or leak content into a label. Histograms now report
+  mean/p50/p95/p99.
+- **Limits** (`app/security/limits.py`): UTF-8-aware body size limit,
+  in-flight backpressure, and a deadline. On overload the routers return a
+  retryable `503` with a valid integer-seconds `Retry-After` (R57); a body over
+  the limit returns `413`. Validation errors never reflect input values (R52).
+
+Canary tests in `tests/integration/test_g5_safety.py` inject a synthetic canary
+into a request and assert it never appears in logs, metric label values, error
+responses, or tracebacks. `tests/unit/test_limits.py` covers the limits.
+
+## 2. 100k-token handling
+
+The engine processes the whole document in one pass (no silent truncation).
+`tests/integration/test_100k.py` builds a ~100k-token document (approximate
+tokenizer **chars/4, marked `estimated`** — not the organizers' tokenizer, R61)
+with sensitive fragments at the beginning, middle, and end, and asserts:
+
+- the document is processed without crashing;
+- all sensitive fragments (start/mid/end) are masked;
+- round-trip `unmask(mask(x)) == x` is exact.
+
+Result: **PASSED** — the 100k document is fully processed, end-of-document
+fragment is masked, and round-trip is exact. This is a **functional** result,
+separate from throughput (R60).
+
+## 3. Load-test tool
+
+`scripts/loadtest.py` is a reproducible local load-testing tool:
+
+```
+.venv/bin/python scripts/loadtest.py --profile smoke
+.venv/bin/python scripts/loadtest.py --profile uniform --rps 330 --duration 10
+.venv/bin/python scripts/loadtest.py --profile ramp
+.venv/bin/python scripts/loadtest.py --profile sustained --rps 1000 --duration 15
+.venv/bin/python scripts/loadtest.py --profiles smoke,uniform,mix,retries
+```
+
+Features:
+
+- seed, config, and an aggregated report saved to `artifacts/load_report.json`;
+- keep-alive connections (each worker owns a dedicated `httpx.Client`);
+- distinguishes **closed-model** load (fixed concurrency, measures max
+  throughput) from **fixed-intensity** load (rate-limited, measures latency
+  under offered load);
+- profiles: `smoke`, `uniform` (~330 RPS), `ramp` (up to 1000 RPS, ~200
+  connections), `sustained` (1000 RPS), `mask_heavy`, `unmask_heavy`, `mix`,
+  `large`, `mixed_length`, `retries`;
+- unmask contexts are pre-created so unmask-heavy profiles do not measure
+  "context missing" errors as work (14.5.5);
+- latency mean/p50/p95/p99 are aggregated across **all** observations, never
+  averaged per worker (14.5).
+
+## 4. Historical reported measurements (before BERT; not current capacity)
+
+Environment: macOS 15.5 arm64, 8 CPU, 16 GiB RAM, Python 3.14.6, 1 uvicorn
+worker (MemoryVault) unless noted, policy `baseline-001`, in-flight limit 64 (default `PII_MAX_IN_FLIGHT`; configurable via env).
+
+| Profile | Attempts | Success | Errors | 429 | Completed RPS | Mask p50/p95/p99 (s) | Unmask p50/p95/p99 (s) |
+|---|---|---|---|---|---|---|---|
+| smoke | 6 | 6 | 0 | 0 | 588 | 0.005 / 0.005 / 0.005 | 0.002 / 0.002 / 0.002 |
+| uniform (330 RPS) | 2027 | 2027 | 0 | 0 | 334 | 0.007 / 0.013 / 0.029 | 0.006 / 0.010 / 0.017 |
+| mask_heavy | 1995 | 1995 | 0 | 0 | 329 | 0.009 / 0.016 / 0.019 | — |
+| unmask_heavy | 2053 | 2053 | 0 | 0 | 339 | 0.004 / 0.004 / 0.013 | 0.005 / 0.009 / 0.017 |
+| mix | 2026 | 2026 | 0 | 0 | 334 | 0.008 / 0.015 / 0.019 | 0.007 / 0.013 / 0.020 |
+| retries | 8 | 8 | 0 | 0 | 675 | 0.004 / 0.004 / 0.004 | 0.003 / 0.003 / 0.003 |
+| sustained (1000 RPS) | 7827 | 7827 | 0 | 0 | **957** | 0.031 / 0.122 / 0.131 | 0.044 / 0.120 / 0.128 |
+| ramp (peak 1000 RPS) | 5612 | 5612 | 0 | 0 | 413* | 0.011 / 0.316 / 0.339 | 0.009 / — / — |
+| large (100k, 100 RPS offered) | 17 | 17 | 0 | 0 | 1.9 | 8.03 / 8.24 / 8.24 | — |
+| large_lowrate (100k, 5 RPS) | 19 | 19 | 0 | 0 | 2.1 | 1.74 / 2.24 / 2.24 | — |
+| mixed_length (90% short / 10% 20k) | 484 | 484 | 0 | 0 | 76 | 0.092 / 0.361 / 0.451 | — |
+| sustained_redisvault_2workers | 1250 | 1250 | 0 | 0 | 108 | 1.46 / 2.70 / 3.01 | 0.168 / 0.643 / 0.843 |
+
+\* ramp `completed_rps` is the average across all ramp steps (100→330→600→1000
+RPS); the peak 1000 RPS step achieved ~650 RPS.
+
+Findings recorded at that historical stage (not revalidated here):
+
+- **MemoryVault (1 worker) sustains ~957 RPS** at 1000 RPS offered, with mask
+  p50 ~31 ms and p99 ~131 ms in that old report. This does not establish a
+  capacity ceiling or current throughput.
+- **Ramp** reproduces the organizers' described profile (up to 1000 RPS, ~200
+  connections); the peak step reached ~650 RPS.
+- **Large 100k-token mask** is functional but slow: ~1.74 s p50 at low rate
+  (above the 1 s SLA). At high offered rate it degrades to ~8 s due to
+  starvation.
+- **mixed_length** shows starvation: mixing 10% long texts with short ones
+  raises short-request p50 from ~3 ms to ~92 ms.
+- **RedisVault (2 workers) is much slower** (~108 RPS) because
+  `ensure_capacity()` performs a full Redis `SCAN` over all keys on every mask
+  (O(N) per request). Single-request mask is ~70 ms vs ~3 ms for MemoryVault.
+- **MemoryVault degrades as it accumulates entries**: `_purge_expired()` is
+  O(N) on every operation. On a fresh server ~957 RPS; after accumulating many
+  entries it drops to ~418 RPS.
+
+## 5. Known bottlenecks
+
+1. **RedisVault `ensure_capacity()` full SCAN** — O(N) per mask; makes the
+   multiworker path ~9x slower than MemoryVault. Needs a cached counter or a
+   bounded scan.
+2. **MemoryVault `_purge_expired()` O(N)** — degrades throughput as entries
+   accumulate.
+3. **100k-token mask ~1.7 s** — above the 1 s SLA; the engine is single-pass
+   and not chunked, so a single large document is CPU-bound.
+4. **Long-text starvation** — mixing long and short requests degrades
+   short-request latency significantly.
+
+All numbers are **LOCAL DIAGNOSTIC** and not the organizers' official formula.
+
+---
+
+# Historical G8 — Previous package verification
+
+This section preserves a previous G8 report. Its load, ZIP and container checks
+predate the model integration and do not verify the current build.
+
+## 1. Historical load numbers (LOCAL DIAGNOSTIC)
+
+The load numbers in the G5 section above were reported for an earlier build
+(2026-09-22, macOS 15.5 arm64, 8 CPU, 16 GiB RAM, Python 3.14.6). Key figures:
+
+- **MemoryVault (1 worker) sustains ~957 RPS** at 1000 RPS offered, mask p50
+  ~31 ms, p99 ~131 ms.
+- **Ramp** reproduces the organizers' described profile (up to 1000 RPS, ~200
+  connections); the peak step reached ~650 RPS.
+- **Large 100k-token mask** is functional but slow: ~1.74 s p50 at low rate
+  (above the 1 s SLA); ~8 s at high offered rate.
+- **RedisVault (2 workers)** sustains ~108 RPS (O(N) capacity scan bottleneck).
+- Zero errors, zero 429s, zero 5xx, zero timeouts across all profiles.
+
+## 1a. Historical sequential /process diagnostic (not offered-load evidence)
+
+Historical sequential test against the official `POST /process` contract
+(`{payload, payload_id} → {result}`), mask-heavy (RPS = requests, not pairs),
+reusing dataset texts with distinct payload_id per pair. Report:
+`artifacts/process_load_report.json`.
+
+**IMPORTANT — accounting fix (review issue 1):** the previous report
+double-counted attempts/successes (4 HTTP requests → 8 reported). The loadtest
+now counts at one authoritative location (`_finalize` from recorded
+observations). The old report is retained as historical but is INVALID for
+throughput claims. The fresh report reconciles: attempts == successes == latency
+observations.
+
+- **60 s, configured mask-loop ceiling 1000/s; actual offered HTTP rate was not measured**:
+  22885 attempts, 22885 successes, 0 errors,
+  0 429s, 0 5xx, 0 timeouts, 0 correctness failures.
+- **22885 latency observations** (matches attempts — no double-counting).
+- **Process latency**: mean 2.60 ms, p50 2.37 ms, p95 4.64 ms, p99 5.37 ms —
+  recorded at that sequential workload, not at 1000 RPS or with BERT enabled.
+- **Completed RPS ~381** in that sequential run. The test couples request
+  arrival to completion, so it cannot distinguish generator and service limits
+  or establish service headroom. Low single-request latency is not proof that
+  concurrent requests can sustain 1000 RPS.
+- **Exact restoration**: 0 correctness failures (all sampled mask→demask pairs
+  restored exactly).
+- This run is not a representative subset of a 1000 RPS open-loop test.
+  Reconciled counters fix double-counting; they do not fix the sequential load model.
+
+## 2. Clean-run verification (G8)
+
+A fresh temp directory was created, the source (app/, configs/, scripts/,
+tests/, docs/, pyproject.toml, README.md, .env.example, .gitignore) was copied
+(no .venv, caches, artifacts, or .env), a venv was created, deps installed
+(`python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`), fixtures were
+generated (`scripts/generate_fixtures.py`), and the full suite was run.
+
+Result: **223 passed, exit 0**. The smoke test (`scripts/smoke.py`) returned
+`ROUND_TRIP_OK: True`. The app served `/` (UI, HTTP 200) and `/health`
+(`{"status":"alive","ready":true}`).
+
+The same procedure was repeated from the extracted source ZIP
+(`artifacts/alfagen_source.zip`): **223 passed, exit 0**, smoke
+`ROUND_TRIP_OK: True`, `/` and `/health` OK. This proves the source ZIP is
+reproducible.
+
+## 3. Container path (G8)
+
+A `Dockerfile` and `compose.yaml` were added. The Docker image was built and
+run locally; the container served `/` (HTTP 200) and `/health`
+(`{"status":"alive","ready":true}`), and the smoke test returned
+`ROUND_TRIP_OK: True`.
+
+All numbers are **LOCAL DIAGNOSTIC** and not the organizers' official formula.
