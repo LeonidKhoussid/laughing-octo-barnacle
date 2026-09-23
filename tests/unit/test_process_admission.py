@@ -131,10 +131,10 @@ def test_deadline_includes_wait_for_worker():
                 await asyncio.wait_for(worker_busy.wait(), 2)
                 request = asyncio.create_task(post(client, "queued"))
                 await asyncio.sleep(0.05)
-                assert limits._in_flight == 1
+                response = await asyncio.wait_for(request, 0.5)
+                assert limits._in_flight == 0
                 assert not calls
                 release.set()
-                response = await asyncio.wait_for(request, 2)
                 assert response.status_code == 429
                 assert response.headers["Retry-After"] == "1"
                 assert CANARY not in response.text
@@ -183,6 +183,41 @@ def test_anyio_cancellation_does_not_release_slot_before_worker_finishes():
                     release.set()
                 await asyncio.wait_for(done.wait(), 2)
             assert limits._in_flight == 0
+
+    asyncio.run(exercise())
+
+
+def test_running_deadline_returns_before_worker_finishes_and_preserves_capacity():
+    async def exercise():
+        entered = asyncio.Event()
+        release = threading.Event()
+        loop = asyncio.get_running_loop()
+        limits = Limits(max_in_flight=1, max_processing_seconds=0.1)
+        committed = []
+
+        def process(namespace, identity, text, policy):
+            loop.call_soon_threadsafe(entered.set)
+            assert release.wait(5)
+            committed.append(identity)
+            return SimpleNamespace(masked_text="protected", mapping={})
+
+        app = application(process, limits)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            pending = asyncio.create_task(post(client, "timed-out"))
+            try:
+                await asyncio.wait_for(entered.wait(), 2)
+                response = await asyncio.wait_for(pending, 0.5)
+                assert response.status_code == 429
+                assert response.headers["Retry-After"] == "1"
+                assert CANARY not in response.text
+                assert limits._in_flight == 1
+                assert not committed
+                assert (await post(client, "overload")).status_code == 429
+            finally:
+                release.set()
+                await wait_for_in_flight(limits, 0)
+            assert committed == ["timed-out"]
+            assert (await post(client, "recovered")).status_code == 200
 
     asyncio.run(exercise())
 

@@ -11,7 +11,21 @@ with exact round-trip `unmask(mask(x)) == x`.
 
 ## Quick start
 
+For the server, build and run the complete React + Python service:
+
 ```bash
+docker compose up --build -d
+```
+
+Open <http://localhost:8000/>; the basic judge demo and `/process` require no API
+key or `.env` file. The build downloads the pinned models once. See
+[server deployment](docs/server-deployment.md) for update, verification, and
+optional Redis instructions. The default is one worker with MemoryVault.
+
+For local development without Docker:
+
+```bash
+(cd frontend && npm ci && npm run build)
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/python scripts/download_semantic_models.py
@@ -44,7 +58,7 @@ It is served by FastAPI at the service root.
 
 ```bash
 cd frontend
-npm install
+npm ci
 ```
 
 ### Run the React development server (with API proxying to :8000)
@@ -89,8 +103,10 @@ npm run typecheck
 
 ## Official contract status
 
-The official `POST /process` contract (Appendix A of `ds.pdf`) is **VERIFIED** and
-implemented in `app/api/autocheck.py`:
+The official `POST /process` contract (Appendix A of `ds.pdf`, checked again
+against `Модуль_безопасности_ПД (1).pdf`) is implemented in
+`app/api/autocheck.py` and **verified by local contract tests**; the hidden
+organizer test has not been run:
 
 ```
 POST /process
@@ -107,11 +123,15 @@ explicitly-marked stub provider (no real LLM call).
 
 ## Setup (5 sentences)
 
-1. Add a system to `configs/consumers.yaml` and set its allowed access method.
-2. Choose the PII types and the full-mask strategy for each of them.
-3. Specify whether unmasking and LLM egress are allowed.
-4. Validate the configuration with the project command and activate the new version.
-5. Send a test request and check the policy version, result, and metrics.
+1. Add the system to `configs/consumers.yaml`, set `enabled`, a unique `namespace`, and `authentication: api_key` with its `api_key_env`.
+2. Set `detect_types` to `all_required` or the required category list, and choose `default_action: tokenize_full` or `opaque_token_full`.
+3. Set `allow_unmask` and `allow_llm_egress` for that system and configure its secret API key on the server.
+4. Validate with `.venv/bin/python -c "from app.policies.loader import load_policy_config; load_policy_config('configs/consumers.yaml')"` and rebuild/restart the service so all workers load the same file.
+5. Send a mask–restore request, check `/health` and `/metrics`, and use a new policy version for a configuration release.
+
+Runtime UI updates affect one process and do not persist across restarts;
+edit the source configuration and redeploy for durable or multiworker changes.
+The competition exception applies to the isolated `autocheck` profile only.
 
 ## Adding a new data type without rewriting the core (C4)
 
@@ -147,3 +167,17 @@ than silently disabling detection.
 - `app/observability/` — safe logging and bounded metrics.
 - `app/trust_lab/` — Trust Lab (Actions A/B/C, safe report).
 - `tests/` — unit, integration, and property tests.
+
+## Requirements and verification
+
+[Requirement-by-requirement status](docs/requirements-verification.md) separates
+implemented behavior, executed checks, and remaining gaps. Test counts and local
+synthetic scores are not evidence of 95% accuracy on the hidden judge dataset.
+A public endpoint and source ZIP are both required for submission (§7).
+
+`/metrics` exposes request counts, latency distributions, worker-local RPS,
+estimated incoming-text TPS, and exact successful model-inference input TPS.
+Model TPS includes NER window overlap/special tokens and NLI hypotheses; its
+60-second window and token definition are returned with the values. Technical
+logs contain generated request IDs, stages, and category counts, never text,
+reversible tokens, mappings, payload IDs, or keys.

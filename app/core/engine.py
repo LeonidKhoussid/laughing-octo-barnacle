@@ -25,6 +25,7 @@ from app.core.detokenizer import detokenize
 from app.core.models import Decision, Detection
 from app.core.span_resolver import ResolvedSpan, resolve_spans
 from app.core.tokens import TokenContext, TokenGenerator
+from app.observability.telemetry import stage
 from app.policies.schema import ConsumerPolicy
 
 
@@ -83,7 +84,10 @@ class Engine:
         if policy is not None:
             detections = self._apply_combination_rules(detections, original, policy)
 
+        stage("detect", detected_counts=self._category_counts(detections))
+
         resolved = resolve_spans(detections, len(original))
+        stage("resolve", detected_counts=self._category_counts(resolved))
 
         action = (
             mask_action
@@ -119,6 +123,7 @@ class Engine:
             parts.append(original[cursor:])
 
         masked = "".join(parts)
+        stage("mask", detected_counts=self._category_counts(resolved))
         return MaskResult(
             masked_text=masked,
             token_mapping=mapping,
@@ -128,7 +133,17 @@ class Engine:
 
     def unmask(self, masked: str, mapping: dict[str, str]) -> str:
         """Restore the exact original from masked text using the token mapping."""
+        stage("unmask")
         return detokenize(masked, mapping)
+
+    @staticmethod
+    def _category_counts(items: Iterable[object]) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for item in items:
+            category = getattr(item, "category", None)
+            if isinstance(category, str):
+                counts[category] = counts.get(category, 0) + 1
+        return counts
 
     @staticmethod
     def _opaque_marker(

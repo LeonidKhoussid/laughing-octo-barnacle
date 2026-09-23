@@ -204,6 +204,25 @@ class TestAddress:
         det = AddressDetector()
         assert det.detect("Адрес отделения: г. Москва, ул. Тверская, д. 10") == []
 
+    @pytest.mark.parametrize("identifier", [
+        "qze8c717369d42x24",
+        "меткаЖ717369ю42",
+    ])
+    def test_postcode_does_not_match_inside_unicode_identifier(self, identifier):
+        text = (
+            "Адрес клиента: Россия, 350000, г. Краснодар, ул. Северная, д. 15, кв. 8.\n"
+            f"Контрольная метка: {identifier}."
+        )
+        result = AddressDetector().detect(text)
+        values = [text[span.start:span.end] for span in result[0].sensitive_spans]
+        assert values == ["Россия", "350000", "Краснодар", "Северная", "15", "8"]
+
+    def test_postcode_accepts_punctuation_and_nonbreaking_space_boundaries(self):
+        text = "Адрес клиента: Россия,\u00a0350000; г. Краснодар, ул. Северная, д. 15, кв. 8."
+        result = AddressDetector().detect(text)
+        values = [text[span.start:span.end] for span in result[0].sensitive_spans]
+        assert "350000" in values
+
 
 from app.detectors.card_security import CardholderNameDetector, CvvDetector, PinDetector
 from app.detectors.documents import (

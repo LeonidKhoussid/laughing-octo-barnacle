@@ -106,6 +106,19 @@ def test_runtime_error_does_not_expose_input_or_internal_details():
     assert error.value.__suppress_context__ is True
 
 
+def test_ner_thread_setting_defaults_to_four_and_caps_to_available_cpu(monkeypatch):
+    monkeypatch.setattr(runtime.os, "cpu_count", lambda: 2)
+    monkeypatch.delenv("PII_NER_THREADS", raising=False)
+    assert runtime._ner_threads() == 2
+    monkeypatch.setenv("PII_NER_THREADS", "1")
+    assert runtime._ner_threads() == 1
+    monkeypatch.setenv("PII_NER_THREADS", "4")
+    assert runtime._ner_threads() == 2
+    monkeypatch.setenv("PII_NER_THREADS", "0")
+    with pytest.raises(ValueError, match="1..32"):
+        runtime._ner_threads()
+
+
 def test_missing_and_corrupt_assets_fail_verification(tmp_path, monkeypatch):
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"models": {"ner": {"files": {"model.onnx": {"sha256": "0" * 64}}}}}))

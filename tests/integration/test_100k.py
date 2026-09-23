@@ -1,11 +1,14 @@
-"""G5 functional test: a ~100k-token document is processed end-to-end.
+"""A document of at least 100k actual RuBERT NER tokens is processed end-to-end.
 
-The tokenizer used here is APPROXIMATE (chars/4), marked `estimated` (R61,
-section 14.4). It is NOT the organizers' tokenizer. The engine processes the
-whole document in one pass (no silent truncation), so sensitive fragments at the
-beginning, middle, and end must all be masked, and round-trip must be exact.
+The tokenizer is the pinned active NER tokenizer, not an organizer-specified
+tokenizer. Sensitive fragments at start/middle/end and exact restoration are
+checked. The old chars/4 fixture contained only 60,897 tokens with this tokenizer.
 """
 import os
+from functools import lru_cache
+from pathlib import Path
+
+from tokenizers import Tokenizer
 
 os.environ["SUPPORT_DEMO_API_KEY"] = "test-support-key"
 
@@ -16,18 +19,26 @@ from app.main import create_app
 
 SUPPORT_KEY = "test-support-key"
 
-# Approximate tokenizer: ~4 chars per token (English/Russian mixed). Marked
-# `estimated` — not the organizers' tokenizer (R61).
-CHARS_PER_TOKEN = 4.0
 TARGET_TOKENS = 100_000
 
 
-def approx_tokens(text: str) -> int:
-    return int(len(text) / CHARS_PER_TOKEN)
+@lru_cache(maxsize=1)
+def document_tokenizer():
+    path = Path(__file__).resolve().parents[2] / "models/semantic/ner/tokenizer.json"
+    tokenizer = Tokenizer.from_file(str(path))
+    tokenizer.no_padding()
+    tokenizer.no_truncation()
+    return tokenizer
 
+
+def actual_tokens(text: str) -> int:
+    return len(document_tokenizer().encode(text, add_special_tokens=False).ids)
+
+
+@lru_cache(maxsize=1)
 
 def build_100k_text() -> str:
-    """Build a ~100k-token document with sensitive fragments at start/mid/end."""
+    """Build a tokenizer-measured 100k-token document with sensitive fragments at start/mid/end."""
     filler = (
         "Это обычный текст документа без персональных данных. "
         "Здесь описывается некоторая деловая информация и контекст. "
@@ -36,16 +47,11 @@ def build_100k_text() -> str:
     mid_frag = "паспорт серия 0318 номер 123456, карта 4276189074144957. "
     end_frag = "дата рождения 12 апреля 1990 года, адрес г. Москва, ул. Тверская, д. 15, кв. 42."
 
-    # Build filler to reach ~100k tokens. Use a small margin so the final
-    # document is guaranteed >= 100k tokens even with the mid/end fragments.
-    parts = [start_frag]
-    while approx_tokens("".join(parts)) < TARGET_TOKENS // 2:
-        parts.append(filler)
-    parts.append(mid_frag)
-    while approx_tokens("".join(parts)) < TARGET_TOKENS + 200:
-        parts.append(filler)
-    parts.append(end_frag)
-    return "".join(parts)
+    # Construct linearly instead of joining an ever-growing list in a loop.
+    repeats = (TARGET_TOKENS + actual_tokens(filler) - 1) // actual_tokens(filler)
+    text = start_frag + filler * (repeats // 2) + mid_frag + filler * (repeats - repeats // 2) + end_frag
+    assert actual_tokens(text) >= TARGET_TOKENS
+    return text
 
 
 @pytest.fixture(scope="module")
@@ -58,7 +64,7 @@ def client():
 class Test100kFunctional:
     def test_100k_document_processed_without_crash(self, client):
         text = build_100k_text()
-        n_tokens = approx_tokens(text)
+        n_tokens = actual_tokens(text)
         assert n_tokens >= 100_000, f"expected >=100k tokens, got {n_tokens}"
 
         r = client.post(

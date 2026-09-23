@@ -42,12 +42,15 @@ _ABBREVIATIONS = {"г", "ул", "д", "кв", "стр", "корп", "им", "п�
 _ELIGIBLE = {"FULL_NAME", "BIRTH_DATE", "BIRTH_PLACE", "ADDRESS", "EMAIL", "PHONE", "CITIZENSHIP"}
 _PRIVATE_HYPOTHESIS = "Текст содержит частные сведения о человеке."
 _AUTHORSHIP = re.compile(r"(?i)\b(?:автор\w*|докладчик\w*|подпись|обложк\w*|работах|работы)\b")
+_PUBLIC_CATALOG = re.compile(r"(?i)\b(?:общедоступн\w*|открыт\w*|публичн\w*)\s+каталог\w*\b")
+_CATALOG_CREDIT = re.compile(r"(?i)\b(?:автор\w*|художник\w*|куратор\w*|композитор\w*|переводчик\w*)\b")
 _EDITORIAL_CONTACT = re.compile(r"(?i)\b(?:редакци\w*|пресс-служб\w*|читател\w*)\b")
 _PUBLIC_PROGRAM = re.compile(r"(?i)\b(?:лекци\w*|докладчик\w*|выставк\w*|анонс\w*|публичн\w*\s+программ\w*)\b")
 _PUBLIC_EVIDENCE = {
     "public-context": ("local_nli_public_context", "semantic-public-context"),
     "historical-reference": ("historical_public_reference", "historical-public-reference"),
     "institution-dedication": ("institution_dedication", "institution-dedication"),
+    "public-catalog-credit": ("public_catalog_credit", "public-catalog-credit"),
 }
 
 
@@ -74,7 +77,7 @@ def _detection(span: Span, score: float) -> Detection:
 
 class SemanticDetector(Detector):
     detector_id = "semantic_context"
-    detector_version = "1.2.0"
+    detector_version = "1.3.0"
 
     def __init__(self, model_dir: str) -> None:
         self.runtime = get_runtime(model_dir)
@@ -158,6 +161,14 @@ class SemanticDetector(Detector):
                 if (detection.category == "FULL_NAME" and _INSTITUTION.search(passage)
                         and re.search(r"(?i)\b(?:имени|им\.)\s*$", text[max(begin, span.start-20):span.start])):
                     decisions[key] = "institution-dedication", 1.0
+                    continue
+                # An explicit credit in an openly published catalogue is a
+                # public attribution. This is local to this name and sentence;
+                # private records were guarded above and ordinary author words
+                # still require the model or remain protected.
+                if (detection.category == "FULL_NAME" and _PUBLIC_CATALOG.search(passage)
+                        and _CATALOG_CREDIT.search(passage)):
+                    decisions[key] = "public-catalog-credit", 1.0
                     continue
                 hypotheses = self._hypotheses(value, detection.category, passage)
                 if hypotheses:

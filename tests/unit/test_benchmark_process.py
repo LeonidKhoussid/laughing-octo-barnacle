@@ -71,6 +71,20 @@ def test_all_failure_types_count_once_and_not_as_success():
     assert report["latency_ms"]["all_http"]["count"] == 6
 
 
+def test_failure_examples_keep_correctness_after_global_examples_fill():
+    handler, _ = fake_handler(failures={**{i: 429 for i in range(1, 11)}, 11: "incorrect"})
+    report = run(handler, mode="closed", duration=1, concurrency=1, count=12, kinds=("private",))
+    assert [item["outcome"] for item in report["failure_examples"]] == ["http_error"] * 10
+    grouped = report["failure_examples_by_outcome"]
+    assert len(grouped["http_error"]) == 10
+    assert grouped["correctness_failure"] == [{
+        "slot": 10, "operation": "mask", "kind": "private", "status": 200,
+        "outcome": "correctness_failure", "mismatch": "mask_oracle",
+    }]
+    assert grouped["timeout"] == grouped["transport_error"] == grouped["malformed_response"] == []
+    assert all("payload" not in item and "result" not in item for examples in grouped.values() for item in examples)
+
+
 def test_incorrect_restoration_is_not_a_success():
     handler, _ = fake_handler(wrong_restore=True)
     report = run(handler, mode="closed", duration=1, concurrency=1, count=2,
@@ -114,3 +128,15 @@ def test_mask_oracle_catches_partial_leak_and_damaged_public_content():
     public = sample_for(0, "test", ("public",))
     assert public.accepts_mask(public.text)
     assert not public.accepts_mask("all masked")
+
+
+def test_required_mix_covers_all_seventeen_categories_with_independent_spans():
+    from scripts.benchmark_process import required_cases
+    samples = [sample_for(i, "required-fields", ("required",)) for i in range(len(required_cases()))]
+    assert len({sample.kind for sample in samples}) == 17
+    for sample in samples:
+        result = sample.text
+        for value in sample.private:
+            result = result.replace(value, "⟦PII:TEST:abcdefghijklmnop⟧", 1)
+        assert sample.accepts_mask(result)
+        assert not sample.accepts_mask(sample.text)

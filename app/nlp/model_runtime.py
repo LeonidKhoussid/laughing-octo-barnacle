@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 
+from app.observability.telemetry import record_model_tokens
+
 
 # Suppress ORT's native telemetry uploader before importing/initializing ORT.
 # disable_telemetry_events() alone stops events but can leave its HTTP worker
@@ -27,6 +29,7 @@ NER_TOKENS = 256
 NER_OVERLAP = 48
 NLI_TOKENS = 512
 BATCH_SIZE = 8
+_MAX_NER_THREADS = 32
 
 
 class ModelUnavailable(RuntimeError):
@@ -42,6 +45,23 @@ class Entity:
     end: int
     label: str
     score: float
+
+
+def _ner_threads() -> int:
+    """Return configured NER intra-op threads, bounded by available CPUs.
+
+    ``PII_NER_THREADS`` accepts 1..32. The default is four threads, capped on
+    smaller hosts. Context/NLI intentionally remains single-threaded so short
+    request throughput is not traded for one large NER document.
+    """
+    raw = os.environ.get("PII_NER_THREADS", "4")
+    try:
+        requested = int(raw)
+    except ValueError:
+        raise ValueError("PII_NER_THREADS must be an integer") from None
+    if not 1 <= requested <= _MAX_NER_THREADS:
+        raise ValueError(f"PII_NER_THREADS must be within 1..{_MAX_NER_THREADS}")
+    return min(requested, max(1, os.cpu_count() or 1))
 
 
 def file_sha256(path: Path) -> str:
@@ -93,11 +113,16 @@ class ModelRuntime:
             ort.disable_telemetry_events()
             directory = Path(model_dir)
             self.manifest = _verify_assets(directory)
-            options = ort.SessionOptions()
-            options.intra_op_num_threads = 1
-            options.inter_op_num_threads = 1
-            options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-            options.log_severity_level = 4
+            ner_options = ort.SessionOptions()
+            ner_options.intra_op_num_threads = _ner_threads()
+            ner_options.inter_op_num_threads = 1
+            ner_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            ner_options.log_severity_level = 4
+            context_options = ort.SessionOptions()
+            context_options.intra_op_num_threads = 1
+            context_options.inter_op_num_threads = 1
+            context_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            context_options.log_severity_level = 4
             self._sessions = {}
             self._tokenizers = {}
             self._configs = {}
@@ -110,7 +135,7 @@ class ModelRuntime:
                 self._tokenizers[name] = tokenizer
                 self._sessions[name] = ort.InferenceSession(
                     str(folder / self.manifest["models"][name]["weights"]),
-                    sess_options=options,
+                    sess_options=ner_options if name == "ner" else context_options,
                     providers=["CPUExecutionProvider"],
                 )
             labels = self._configs["context"]["label2id"]
@@ -152,6 +177,7 @@ class ModelRuntime:
             batch = windows[batch_start:batch_start + BATCH_SIZE]
             rows = [([cls_id, *ids[start:stop], sep_id], [0] * (stop - start + 2)) for start, stop in batch]
             logits = _run(self._sessions["ner"], rows, self._configs["ner"]["pad_token_id"])
+            record_model_tokens("ner", sum(len(row[0]) for row in rows))
             probabilities = _softmax(logits)
             if probabilities.shape[:2] != (len(rows), max(len(row[0]) for row in rows)):
                 raise ModelUnavailable()
@@ -205,6 +231,7 @@ class ModelRuntime:
                 if any(len(row.ids) > NLI_TOKENS for row in encoded):
                     raise ModelUnavailable()
                 logits = _run(self._sessions["context"], [(row.ids, row.type_ids) for row in encoded], self._configs["context"]["pad_token_id"])
+                record_model_tokens("context", sum(len(row.ids) for row in encoded))
                 probabilities = _softmax(logits)
                 if probabilities.shape != (len(encoded), 3):
                     raise ModelUnavailable()

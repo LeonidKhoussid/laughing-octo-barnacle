@@ -1,5 +1,7 @@
 # Evidence Checklist — AlfaGen PII Gateway (G8 + independent audit)
 
+> Актуальное сопоставление с полным ТЗ от 23.09.2026: [requirements-verification.md](requirements-verification.md). Ниже сохранены исторические этапы и их результаты; старые утверждения о завершении, отсутствии Приложения A, regex-only детекции и оценочные 100k не являются текущим статусом.
+
 Mapping of the Definition of Done (master prompt section 23.1) to actual
 evidence: which tests/commands prove each item, and which are BLOCKED/NOT_RUN.
 Statuses: PASSED / FAILED / NOT_RUN / BLOCKED. Nothing is marked done unless it

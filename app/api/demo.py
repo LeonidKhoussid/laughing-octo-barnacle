@@ -11,6 +11,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Header, HTTPException
+from starlette.concurrency import run_in_threadpool
 
 from app.api.errors import (
     conflict,
@@ -39,6 +40,7 @@ from app.core.engine import Engine
 from app.nlp.model_runtime import ModelUnavailable
 from app.observability.logs import SafeLogger
 from app.observability.metrics import Metrics
+from app.observability.telemetry import record_result, request_telemetry
 from app.policies.loader import PolicyStore
 from app.providers.stub import StubProvider
 from app.security.auth import verify_api_key
@@ -126,187 +128,207 @@ def build_demo_router(
         lifecycle = Lifecycle(vault, engine, None, policy_store.policy_version)  # type: ignore[arg-type]
 
     @r.post("/mask")
-    def mask(req: MaskRequest, x_api_key: str | None = Header(default=None)) -> MaskResponse:
+    async def mask(req: MaskRequest, x_api_key: str | None = Header(default=None)) -> MaskResponse:
         policy = policy_store.get_consumer(req.consumer)
-        if policy is None or not policy.enabled:
-            raise forbidden()
-        if not verify_api_key(policy, x_api_key):
-            raise unauthorized()
-
+        consumer = policy.name if policy is not None and policy.enabled else "unauthenticated"
+        request_id = logger.new_request_id()
+        status = "error"
+        started_at = time.monotonic()
         try:
-            limits.check_body(len(req.text.encode("utf-8")))
-            limits.acquire()
-        except (BackpressureError, BodyTooLargeError) as exc:
-            metrics.inc("pii_backpressure_total", reason="mask")
-            raise _map_limit_error(exc)
-        try:
-            request_id = logger.new_request_id()
-            context_id = req.context_id or uuid.uuid4().hex
-            started_at = time.monotonic()
-            with metrics.timed("pii_request_duration_seconds", operation="mask"):
-                outcome = lifecycle.mask(
-                    policy.namespace, context_id, req.text, policy
-                )
-            limits.check_deadline(started_at)
-            metrics.inc("pii_requests_total", operation="mask", status="success")
-            logger.info(
-                "mask completed",
+            with request_telemetry(
+                logger, metrics,
                 request_id=request_id,
                 operation="mask",
-                consumer=req.consumer,
+                consumer=consumer,
                 policy_version=policy_store.policy_version,
-                stage="completed",
-                detected_counts=_count_categories(outcome.resolved_spans),
-                degraded=False,
-                result="success",
-            )
-            return MaskResponse(
-                masked_text=outcome.masked_text,
-                policy_version=policy_store.policy_version,
-                detected_counts=_count_categories(outcome.resolved_spans),
-                context_id=context_id,
-                mask_action=policy.default_action,
-                spans=_spans_from_resolved(outcome.resolved_spans),
-                egress_disabled=not policy.allow_llm_egress,
-            )
+            ):
+                if policy is None or not policy.enabled:
+                    raise forbidden()
+                if not verify_api_key(policy, x_api_key):
+                    raise unauthorized()
+                try:
+                    limits.check_body(len(req.text.encode("utf-8")))
+                except BodyTooLargeError as exc:
+                    metrics.inc("pii_backpressure_total", reason="mask")
+                    raise _map_limit_error(exc)
+                context_id = req.context_id or uuid.uuid4().hex
+
+                def execute():
+                    return lifecycle.mask(policy.namespace, context_id, req.text, policy)
+
+                try:
+                    outcome = await limits.run(execute, run_sync=run_in_threadpool)
+                except (BackpressureError, DeadlineExceededError) as exc:
+                    status = "overload"
+                    metrics.inc("pii_backpressure_total", reason="mask")
+                    record_result(status)
+                    raise _map_limit_error(exc)
+                status = "success"
+                return MaskResponse(
+                    masked_text=outcome.masked_text,
+                    policy_version=policy_store.policy_version,
+                    detected_counts=_count_categories(outcome.resolved_spans),
+                    context_id=context_id,
+                    mask_action=policy.default_action,
+                    spans=_spans_from_resolved(outcome.resolved_spans),
+                    egress_disabled=not policy.allow_llm_egress,
+                )
         except HTTPException:
+            record_result(status)
             raise
-        except DeadlineExceededError as exc:
-            metrics.inc("pii_requests_total", operation="mask", status="overload")
+        except (BackpressureError, DeadlineExceededError) as exc:
+            status = "overload"
+            metrics.inc("pii_backpressure_total", reason="mask")
+            record_result(status)
             raise _map_limit_error(exc)
         except Exception as exc:
-            metrics.inc("pii_requests_total", operation="mask", status="error")
+            record_result(status)
             raise _map_lifecycle_error(exc)
         finally:
-            limits.release()
+            metrics.record_request(
+                operation="mask", status=status, text_characters=len(req.text),
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
     @r.post("/unmask")
-    def unmask(req: UnmaskRequest, x_api_key: str | None = Header(default=None)) -> UnmaskResponse:
+    async def unmask(req: UnmaskRequest, x_api_key: str | None = Header(default=None)) -> UnmaskResponse:
         policy = policy_store.get_consumer(req.consumer)
-        if policy is None or not policy.enabled:
-            raise forbidden()
-        if not verify_api_key(policy, x_api_key):
-            raise unauthorized()
-        # allow_unmask is re-checked at unmask time (R39).
-        if not policy.allow_unmask:
-            raise unmask_denied()
-
+        consumer = policy.name if policy is not None and policy.enabled else "unauthenticated"
+        request_id = logger.new_request_id()
+        status = "error"
+        started_at = time.monotonic()
         try:
-            limits.check_body(len(req.masked_text.encode("utf-8")))
-            limits.acquire()
-        except (BackpressureError, BodyTooLargeError) as exc:
-            metrics.inc("pii_backpressure_total", reason="unmask")
-            raise _map_limit_error(exc)
-        try:
-            request_id = logger.new_request_id()
-            started_at = time.monotonic()
-            with metrics.timed("pii_request_duration_seconds", operation="unmask"):
-                original = lifecycle.unmask(
-                    policy.namespace, req.context_id, req.masked_text, policy
-                )
-            limits.check_deadline(started_at)
-            metrics.inc("pii_requests_total", operation="unmask", status="success")
-            logger.info(
-                "unmask completed",
+            with request_telemetry(
+                logger, metrics,
                 request_id=request_id,
                 operation="unmask",
-                consumer=req.consumer,
+                consumer=consumer,
                 policy_version=policy_store.policy_version,
-                stage="completed",
-                degraded=False,
-                result="success",
-            )
-            return UnmaskResponse(
-                original_text=original,
-                policy_version=policy_store.policy_version,
-            )
+            ):
+                if policy is None or not policy.enabled:
+                    raise forbidden()
+                if not verify_api_key(policy, x_api_key):
+                    raise unauthorized()
+                if not policy.allow_unmask:
+                    raise unmask_denied()
+                try:
+                    limits.check_body(len(req.masked_text.encode("utf-8")))
+                except BodyTooLargeError as exc:
+                    metrics.inc("pii_backpressure_total", reason="unmask")
+                    raise _map_limit_error(exc)
+
+                def execute():
+                    return lifecycle.unmask(policy.namespace, req.context_id, req.masked_text, policy)
+
+                try:
+                    original = await limits.run(execute, run_sync=run_in_threadpool)
+                except (BackpressureError, DeadlineExceededError) as exc:
+                    status = "overload"
+                    metrics.inc("pii_backpressure_total", reason="unmask")
+                    record_result(status)
+                    raise _map_limit_error(exc)
+                status = "success"
+                return UnmaskResponse(
+                    original_text=original,
+                    policy_version=policy_store.policy_version,
+                )
         except HTTPException:
+            record_result(status)
             raise
-        except DeadlineExceededError as exc:
-            metrics.inc("pii_requests_total", operation="unmask", status="overload")
+        except (BackpressureError, DeadlineExceededError) as exc:
+            status = "overload"
+            metrics.inc("pii_backpressure_total", reason="unmask")
+            record_result(status)
             raise _map_limit_error(exc)
         except Exception as exc:
-            metrics.inc("pii_requests_total", operation="unmask", status="error")
+            record_result(status)
             raise _map_lifecycle_error(exc)
         finally:
-            limits.release()
+            metrics.record_request(
+                operation="unmask", status=status, text_characters=len(req.masked_text),
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
     @r.post("/chat")
-    def chat(req: ChatRequest, x_api_key: str | None = Header(default=None)) -> ChatResponse:
+    async def chat(req: ChatRequest, x_api_key: str | None = Header(default=None)) -> ChatResponse:
         policy = policy_store.get_consumer(req.consumer)
-        if policy is None or not policy.enabled:
-            raise forbidden()
-        if not verify_api_key(policy, x_api_key):
-            raise unauthorized()
-        if not policy.allow_llm_egress:
-            raise forbidden()
-
+        consumer = policy.name if policy is not None and policy.enabled else "unauthenticated"
+        request_id = logger.new_request_id()
+        status = "error"
+        started_at = time.monotonic()
         try:
-            limits.check_body(len(req.masked_text.encode("utf-8")))
-            limits.acquire()
-        except (BackpressureError, BodyTooLargeError) as exc:
-            metrics.inc("pii_backpressure_total", reason="chat")
-            raise _map_limit_error(exc)
-        try:
-            request_id = logger.new_request_id()
-            started_at = time.monotonic()
-            # Egress must depend on ACTUAL server-side processing, not caller
-            # claims (C). Verify the masked_text corresponds to a committed
-            # record for this context, and fetch the real mapping.
-            try:
-                record = vault.get(policy.namespace, req.context_id)
-            except Exception:  # noqa: BLE001
-                record = None
-            if record is None or record.get("state") not in ("READY", "RESTORED"):
-                raise context_missing()
-            if record.get("masked_text") != req.masked_text:
-                raise conflict()
-            mapping = record.get("mapping") or {}
-
-            check = egress_guard.check(
-                policy,
-                stub.provider_id,
-                req.masked_text,
-                stages_completed=["detect", "resolve", "mask"],
-                remaining_sensitive_spans=0,
-                mapping=mapping,
-            )
-            if not check.ok:
-                metrics.inc("pii_egress_blocks_total", reason="policy")
-                raise forbidden()
-            response = stub.complete(req.masked_text)
-            # Output protection: inspect the provider response for NEWLY
-            # introduced sensitive content. Known tokens from the authorized
-            # context are preserved (not re-detected); any new sensitive text
-            # is masked before the response is returned (section 13, R47).
-            protected = _protect_provider_output(engine, response, mapping)
-            limits.check_deadline(started_at)
-            metrics.inc("pii_requests_total", operation="chat", status="success")
-            metrics.inc("pii_upstream_calls_total", provider="stub", result="success")
-            logger.info(
-                "chat completed",
+            with request_telemetry(
+                logger, metrics,
                 request_id=request_id,
                 operation="chat",
-                consumer=req.consumer,
+                consumer=consumer,
                 policy_version=policy_store.policy_version,
-                stage="completed",
-                degraded=False,
-                result="success",
-            )
-            return ChatResponse(response=protected, provider=stub.provider_id, stub=True)
+            ):
+                if policy is None or not policy.enabled:
+                    raise forbidden()
+                if not verify_api_key(policy, x_api_key):
+                    raise unauthorized()
+                if not policy.allow_llm_egress:
+                    raise forbidden()
+                try:
+                    limits.check_body(len(req.masked_text.encode("utf-8")))
+                except BodyTooLargeError as exc:
+                    metrics.inc("pii_backpressure_total", reason="chat")
+                    raise _map_limit_error(exc)
+
+                def execute():
+                    # Egress must depend on ACTUAL server-side processing, not caller
+                    # claims (C). Verify the masked text matches a committed record.
+                    try:
+                        record = vault.get(policy.namespace, req.context_id)
+                    except Exception:  # noqa: BLE001
+                        record = None
+                    if record is None or record.get("state") not in ("READY", "RESTORED"):
+                        raise context_missing()
+                    if record.get("masked_text") != req.masked_text:
+                        raise conflict()
+                    mapping = record.get("mapping") or {}
+                    check = egress_guard.check(
+                        policy, stub.provider_id, req.masked_text,
+                        stages_completed=["detect", "resolve", "mask"],
+                        remaining_sensitive_spans=0, mapping=mapping,
+                    )
+                    if not check.ok:
+                        metrics.inc("pii_egress_blocks_total", reason="policy")
+                        raise forbidden()
+                    response = stub.complete(req.masked_text)
+                    protected = _protect_provider_output(engine, response, mapping)
+                    metrics.inc("pii_upstream_calls_total", provider="stub", result="success")
+                    return ChatResponse(response=protected, provider=stub.provider_id, stub=True)
+
+                try:
+                    response = await limits.run(execute, run_sync=run_in_threadpool)
+                except (BackpressureError, DeadlineExceededError) as exc:
+                    status = "overload"
+                    metrics.inc("pii_backpressure_total", reason="chat")
+                    record_result(status)
+                    raise _map_limit_error(exc)
+                status = "success"
+                return response
         except HTTPException:
+            record_result(status)
             raise
-        except DeadlineExceededError as exc:
-            metrics.inc("pii_requests_total", operation="chat", status="overload")
+        except (BackpressureError, DeadlineExceededError) as exc:
+            status = "overload"
+            metrics.inc("pii_backpressure_total", reason="chat")
+            record_result(status)
             raise _map_limit_error(exc)
         except Exception as exc:
-            metrics.inc("pii_requests_total", operation="chat", status="error")
+            record_result(status)
             raise _map_lifecycle_error(exc)
         finally:
-            limits.release()
+            metrics.record_request(
+                operation="chat", status=status, text_characters=len(req.masked_text),
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
     @r.post("/restore-response")
-    def restore_response(
+    async def restore_response(
         req: RestoreResponseRequest, x_api_key: str | None = Header(default=None)
     ) -> RestoreResponseResponse:
         """Restore authorized tokens inside a changed provider response.
@@ -316,61 +338,71 @@ def build_demo_router(
         (R25), never fuzzy/recursive/LLM-based demasking.
         """
         policy = policy_store.get_consumer(req.consumer)
-        if policy is None or not policy.enabled:
-            raise forbidden()
-        if not verify_api_key(policy, x_api_key):
-            raise unauthorized()
-        if not policy.allow_unmask:
-            raise unmask_denied()
-
+        consumer = policy.name if policy is not None and policy.enabled else "unauthenticated"
+        request_id = logger.new_request_id()
+        status = "error"
+        started_at = time.monotonic()
         try:
-            limits.check_body(len(req.response_text.encode("utf-8")))
-            limits.acquire()
-        except (BackpressureError, BodyTooLargeError) as exc:
-            metrics.inc("pii_backpressure_total", reason="restore-response")
-            raise _map_limit_error(exc)
-        try:
-            request_id = logger.new_request_id()
-            started_at = time.monotonic()
-            # Protect the response BEFORE restoring: mask any newly introduced
-            # sensitive content so an alternate route cannot bypass output
-            # protection (review issue 7). Known tokens are preserved.
-            try:
-                record = vault.get(policy.namespace, req.context_id)
-            except Exception:  # noqa: BLE001
-                record = None
-            mapping = (record or {}).get("mapping") or {}
-            protected = _protect_provider_output(engine, req.response_text, mapping)
-            with metrics.timed("pii_request_duration_seconds", operation="restore_response"):
-                restored = lifecycle.restore_tokens(
-                    policy.namespace, req.context_id, protected, policy
-                )
-            limits.check_deadline(started_at)
-            metrics.inc("pii_requests_total", operation="restore_response", status="success")
-            logger.info(
-                "restore-response completed",
+            with request_telemetry(
+                logger, metrics,
                 request_id=request_id,
                 operation="restore_response",
-                consumer=req.consumer,
+                consumer=consumer,
                 policy_version=policy_store.policy_version,
-                stage="completed",
-                degraded=False,
-                result="success",
-            )
-            return RestoreResponseResponse(
-                restored_text=restored,
-                policy_version=policy_store.policy_version,
-            )
+            ):
+                if policy is None or not policy.enabled:
+                    raise forbidden()
+                if not verify_api_key(policy, x_api_key):
+                    raise unauthorized()
+                if not policy.allow_unmask:
+                    raise unmask_denied()
+                try:
+                    limits.check_body(len(req.response_text.encode("utf-8")))
+                except BodyTooLargeError as exc:
+                    metrics.inc("pii_backpressure_total", reason="restore-response")
+                    raise _map_limit_error(exc)
+
+                def execute():
+                    try:
+                        record = vault.get(policy.namespace, req.context_id)
+                    except Exception:  # noqa: BLE001
+                        record = None
+                    mapping = (record or {}).get("mapping") or {}
+                    protected = _protect_provider_output(engine, req.response_text, mapping)
+                    restored = lifecycle.restore_tokens(
+                        policy.namespace, req.context_id, protected, policy
+                    )
+                    return RestoreResponseResponse(
+                        restored_text=restored,
+                        policy_version=policy_store.policy_version,
+                    )
+
+                try:
+                    response = await limits.run(execute, run_sync=run_in_threadpool)
+                except (BackpressureError, DeadlineExceededError) as exc:
+                    status = "overload"
+                    metrics.inc("pii_backpressure_total", reason="restore-response")
+                    record_result(status)
+                    raise _map_limit_error(exc)
+                status = "success"
+                return response
         except HTTPException:
+            record_result(status)
             raise
-        except DeadlineExceededError as exc:
-            metrics.inc("pii_requests_total", operation="restore_response", status="overload")
+        except (BackpressureError, DeadlineExceededError) as exc:
+            status = "overload"
+            metrics.inc("pii_backpressure_total", reason="restore-response")
+            record_result(status)
             raise _map_limit_error(exc)
         except Exception as exc:
-            metrics.inc("pii_requests_total", operation="restore_response", status="error")
+            record_result(status)
             raise _map_lifecycle_error(exc)
         finally:
-            limits.release()
+            metrics.record_request(
+                operation="restore_response", status=status,
+                text_characters=len(req.response_text),
+                elapsed_seconds=time.monotonic() - started_at,
+            )
 
     return r
 

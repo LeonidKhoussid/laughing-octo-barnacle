@@ -11,6 +11,7 @@ error) rather than silently disabling encryption (R49, section 11.3).
 from __future__ import annotations
 
 import base64
+import math
 import os
 from contextlib import asynccontextmanager
 
@@ -27,6 +28,7 @@ from app.core.engine import Engine
 from app.detectors.registry import DetectorRegistry
 from app.observability.logs import SafeLogger
 from app.observability.metrics import Metrics
+from app.observability.telemetry import request_telemetry, record_result
 from app.policies.loader import PolicyLoadError, PolicyStore, load_policy_config
 from app.providers.stub import StubProvider
 
@@ -39,6 +41,7 @@ from app.trust_lab.faults import FaultInjector
 from app.trust_lab.transport import TransportCounter
 from app.security.egress import EgressGuard
 from app.security.limits import Limits
+from app.security.body_limit import RawJSONBodyLimit
 from app.vault.base import Vault
 from app.vault.crypto import AeadCipher, CryptoError
 from app.vault.fingerprint import Fingerprinter, derive_fingerprint_key
@@ -160,9 +163,13 @@ def create_app(
 
     logger = SafeLogger()
     metrics = Metrics()
+    processing_seconds = float(os.environ.get("PII_MAX_PROCESSING_SECONDS", "9"))
+    if not math.isfinite(processing_seconds) or not 0 < processing_seconds < 10:
+        raise ValueError("PII_MAX_PROCESSING_SECONDS must be positive and below the checker timeout of 10 seconds")
     limits = Limits(
-        max_body_bytes=_env_int("PII_MAX_BODY_BYTES", 1048576),
-        max_in_flight=_env_int("PII_MAX_IN_FLIGHT", 64),
+        max_body_bytes=_env_int("PII_MAX_BODY_BYTES", 2097152),
+        max_in_flight=_env_int("PII_MAX_IN_FLIGHT", 8),
+        max_processing_seconds=processing_seconds,
     )
     egress_guard = EgressGuard(engine=engine)
     stub = StubProvider()
@@ -178,14 +185,29 @@ def create_app(
 
     app = FastAPI(title="AlfaGen PII Gateway", version="0.1.0", lifespan=lifespan)
 
+    def record_rejected_request(path: str) -> None:
+        operation = {
+            "/process": "process", "/demo/mask": "mask", "/demo/unmask": "unmask",
+            "/demo/chat": "chat", "/demo/restore-response": "restore_response",
+        }.get(path)
+        if operation is not None:
+            with request_telemetry(logger, metrics, operation=operation,
+                                   consumer="unauthenticated", policy_version=policy_store.policy_version):
+                record_result("error")
+            # Rejected bodies never enter processing. There is no reliable text
+            # token count; processing latency is zero, not measured HTTP latency.
+            metrics.record_request(operation=operation, status="error", text_characters=0, elapsed_seconds=0)
+
+    # JSON escaping can occupy six ASCII bytes for one Unicode code point.
+    # Bound the entire transport body before parsing, including ignored fields;
+    # the smaller decoded-text limit is enforced separately by each endpoint.
+    app.add_middleware(RawJSONBodyLimit, max_body_bytes=limits.max_body_bytes * 6 + 4096,
+                       on_reject=record_rejected_request)
+
     @app.exception_handler(RequestValidationError)
     async def _validation_handler(request: Request, exc: RequestValidationError):
-        """Return a safe 422 that never reflects submitted input values (D12).
-
-        FastAPI's default handler echoes the offending value in detail[].input,
-        which can leak personal data. We strip the `input` field and keep only
-        the location and a generic message.
-        """
+        """Never echo submitted values from Pydantic validation failures."""
+        record_rejected_request(request.url.path)
         safe = []
         for err in exc.errors():
             item = {
@@ -272,10 +294,12 @@ def create_app(
         expected = os.environ.get("PII_CONFIG_UPDATE_KEY", "").strip()
         if not expected or req.admin_key != expected:
             raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "config update requires a key"})
+        if _env_int("PII_WORKERS", 1) > 1:
+            raise HTTPException(status_code=409, detail={"code": "config_file_required", "message": "update the configuration file and restart all workers"})
         try:
             updated = policy_store.update_consumer(req.consumer, req.updates)
         except PolicyLoadError as exc:
-            raise HTTPException(status_code=422, detail={"code": "invalid_config", "message": str(exc)}) from exc
+            raise HTTPException(status_code=422, detail={"code": "invalid_config", "message": "configuration rejected by validation"}) from exc
         return JSONResponse(
             content={
                 "policy_version": policy_store.policy_version,

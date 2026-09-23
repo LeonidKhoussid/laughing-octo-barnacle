@@ -3,19 +3,45 @@ services:
     build: .
     ports:
       - "8000:8000"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 35s
     environment:
-      PII_VAULT_BACKEND: memory
-      PII_WORKERS: "1"
-      PII_MAX_BODY_BYTES: "1048576"
-      PII_MAX_IN_FLIGHT: "64"
-      # Demo consumer API keys (placeholders — set real values in deployment).
+      PII_VAULT_BACKEND: ${PII_VAULT_BACKEND:-memory}
+      PII_VAULT_TTL_SECONDS: ${PII_VAULT_TTL_SECONDS:-3600}
+      PII_VAULT_MAX_ENTRIES: ${PII_VAULT_MAX_ENTRIES:-100000}
+      PII_VAULT_MAX_BYTES: ${PII_VAULT_MAX_BYTES:-1073741824}
+      PII_VAULT_KEY: ${PII_VAULT_KEY:-}
+      PII_VAULT_REDIS_URL: ${PII_VAULT_REDIS_URL:-redis://redis:6379/0}
+      PII_WORKERS: ${PII_WORKERS:-1}
+      PII_NER_THREADS: ${PII_NER_THREADS:-4}
+      PII_MAX_BODY_BYTES: ${PII_MAX_BODY_BYTES:-2097152}
+      PII_MAX_IN_FLIGHT: ${PII_MAX_IN_FLIGHT:-8}
+      PII_MAX_PROCESSING_SECONDS: ${PII_MAX_PROCESSING_SECONDS:-9}
+      PII_CONFIG_UPDATE_KEY: ${PII_CONFIG_UPDATE_KEY:-}
       SUPPORT_DEMO_API_KEY: ${SUPPORT_DEMO_API_KEY:-}
       ANALYTICS_DEMO_API_KEY: ${ANALYTICS_DEMO_API_KEY:-}
       COMBINATION_DEMO_API_KEY: ${COMBINATION_DEMO_API_KEY:-}
       DEMO_CHAT_API_KEY: ${DEMO_CHAT_API_KEY:-}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python", "-c", "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)); assert data['ready']"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["redis"]
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:

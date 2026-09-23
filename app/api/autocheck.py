@@ -19,7 +19,6 @@ request cannot access a protected consumer's context (R37).
 from __future__ import annotations
 
 import time
-import threading
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -38,6 +37,7 @@ from app.core.engine import Engine
 from app.nlp.model_runtime import ModelUnavailable
 from app.observability.logs import SafeLogger
 from app.observability.metrics import Metrics
+from app.observability.telemetry import request_telemetry, record_result
 from app.policies.loader import PolicyStore
 from app.security.limits import BackpressureError, BodyTooLargeError, DeadlineExceededError, Limits
 from app.vault.base import Vault
@@ -96,71 +96,37 @@ def build_autocheck_router(
 
     @router.post("/process")
     async def process(req: ProcessRequest) -> ProcessResponse:
-        policy = policy_store.get_consumer("autocheck")
-        if policy is None or not policy.enabled:
-            # Disabled autocheck must not process requests (D07). The official
-            # competition endpoint exception applies only to authentication, not
-            # to a consumer that is explicitly disabled.
-            raise processing_error()
-        request_id = logger.new_request_id()
-        try:
-            limits.check_body(len(req.payload.encode("utf-8")))
-            limits.acquire()
-        except (BackpressureError, BodyTooLargeError) as exc:
-            metrics.inc("pii_backpressure_total", reason="process")
-            raise _map_limit_error(exc)
-        execution_lock = threading.Lock()
-        execution_started = False
-        abandoned = False
-
-        def execute():
-            nonlocal execution_started
-            with execution_lock:
-                if abandoned:
-                    return None
-                execution_started = True
+        started_at = time.monotonic()
+        status = "error"
+        with request_telemetry(
+            logger, metrics, operation="process", consumer="autocheck",
+            policy_version=policy_store.policy_version,
+        ):
             try:
-                return lifecycle.process(policy.namespace, req.payload_id, req.payload, policy)
+                policy = policy_store.get_consumer("autocheck")
+                if policy is None or not policy.enabled:
+                    raise processing_error()
+                limits.check_body(len(req.payload.encode("utf-8")))
+                outcome = await limits.run(
+                    lambda: lifecycle.process(policy.namespace, req.payload_id, req.payload, policy),
+                    run_sync=run_in_threadpool,
+                )
+                status = "success"
+                return ProcessResponse(result=outcome.masked_text)
+            except (BackpressureError, DeadlineExceededError) as exc:
+                status = "overload"
+                metrics.inc("pii_backpressure_total", reason="process")
+                record_result(status)
+                raise _map_limit_error(exc)
+            except BodyTooLargeError as exc:
+                raise _map_limit_error(exc)
+            except Exception as exc:
+                raise _map_lifecycle_error(exc)
             finally:
-                # A native asyncio cancellation can stop awaiting a thread but
-                # cannot stop its work. Keep admission until that work finishes.
-                limits.release()
-
-        try:
-            started_at = time.monotonic()
-            with metrics.timed("pii_request_duration_seconds", operation="process"):
-                # Admit before AnyIO's worker pool so overload cannot accumulate
-                # in its queue. The deadline includes time waiting for a worker.
-                outcome = await run_in_threadpool(execute)
-            limits.check_deadline(started_at)
-            metrics.inc("pii_requests_total", operation="process", status="success")
-            logger.info(
-                "process completed",
-                request_id=request_id,
-                operation="process",
-                consumer="autocheck",
-                policy_version=policy_store.policy_version,
-                stage="completed",
-                detected_counts=_count_categories(outcome.mapping),
-                degraded=False,
-                result="success",
-            )
-            return ProcessResponse(result=outcome.masked_text)
-        except DeadlineExceededError as exc:
-            # Processing-budget exhaustion is a retryable overload (429), not a
-            # 422. Route it through _map_limit_error (review issue 4).
-            metrics.inc("pii_requests_total", operation="process", status="overload")
-            raise _map_limit_error(exc)
-        except Exception as exc:
-            metrics.inc("pii_requests_total", operation="process", status="error")
-            raise _map_lifecycle_error(exc)
-        finally:
-            with execution_lock:
-                if not execution_started:
-                    # Cancellation while queued must free capacity and prevent
-                    # a worker already scheduled by AnyIO from starting later.
-                    abandoned = True
-                    limits.release()
+                metrics.record_request(
+                    operation="process", status=status, text_characters=len(req.payload),
+                    elapsed_seconds=time.monotonic() - started_at,
+                )
 
     return router
 

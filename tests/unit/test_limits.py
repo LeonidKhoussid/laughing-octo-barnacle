@@ -39,7 +39,8 @@ class TestBackpressure:
         limits.release()
         limits.release()  # should not go negative / raise
         limits.acquire()
-        limits.acquire()  # still only 1 in flight
+        with pytest.raises(BackpressureError):
+            limits.acquire()  # duplicate release cannot create capacity
 
     def test_concurrent_backpressure(self):
         limits = Limits(max_in_flight=4)

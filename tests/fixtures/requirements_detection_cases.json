@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "note": "Curated local detector requirements. Synthetic examples only; this is not a representative accuracy sample.",
+  "cases": [
+    {"id": "email", "detector": "EMAIL", "text": "Почта клиента: ivan.petrov@example.test.", "sensitive": ["ivan.petrov@example.test"]},
+    {"id": "phone", "detector": "PHONE", "text": "Телефон: +7 912 345-67-89", "sensitive": ["+7 912 345-67-89"]},
+    {"id": "card", "detector": "CARD", "text": "Карта: 4276 1890 7414 4957", "sensitive": ["4276 1890 7414 4957"]},
+    {"id": "passport-service-words", "detector": "PASSPORT", "text": "Паспорт: серия 45 12, номер 789012", "sensitive": ["45 12", "789012"]},
+    {"id": "full-name-lowercase", "detector": "FULL_NAME", "text": "клиент иван иванович петров", "sensitive": ["иван иванович петров"]},
+    {"id": "birth-date-mm-dd", "detector": "BIRTH_DATE", "text": "Дата рождения: 04.13.1990", "sensitive": ["04.13.1990"]},
+    {"id": "inn", "detector": "INN", "text": "ИНН клиента: 119098818444", "sensitive": ["119098818444"]},
+    {"id": "department-code", "detector": "DEPARTMENT_CODE", "text": "Код подразделения: 770-123", "sensitive": ["770-123"]},
+    {"id": "address-all-components", "detector": "ADDRESS", "text": "Адрес клиента: Россия, 350000, г. Краснодар, ул. Северная, д. 15, кв. 8.", "sensitive": ["Россия", "350000", "Краснодар", "Северная", "15", "8"]},
+    {"id": "birth-place", "detector": "BIRTH_PLACE", "text": "Место рождения: г. Нижний Новгород", "sensitive": ["Нижний Новгород"]},
+    {"id": "citizenship", "detector": "CITIZENSHIP", "text": "Гражданство: Российская Федерация", "sensitive": ["Российская Федерация"]},
+    {"id": "passport-issuer", "detector": "PASSPORT_ISSUER", "text": "Паспорт выдан УФМС России по г. Москве", "sensitive": ["УФМС России по г. Москве"]},
+    {"id": "passport-issue-date-yyyy-dd-mm", "detector": "PASSPORT_ISSUE_DATE", "text": "Дата выдачи: 2015.13.04", "sensitive": ["2015.13.04"]},
+    {"id": "driver-license", "detector": "DRIVER_LICENSE", "text": "Водительское удостоверение: 77 12 345678", "sensitive": ["77 12 345678"]},
+    {"id": "cvv", "detector": "CVV", "text": "CVV: 123", "sensitive": ["123"]},
+    {"id": "pin", "detector": "PIN", "text": "ПИН-код: 4321", "sensitive": ["4321"]},
+    {"id": "cardholder-name-mixed-case", "detector": "CARDHOLDER_NAME", "text": "Cardholder: John Smith", "sensitive": ["John Smith"]},
+    {"id": "birth-date-written-compound", "detector": "BIRTH_DATE", "text": "Дата рождения: двадцать третьего мая 1987 года", "sensitive": ["двадцать третьего мая 1987"]},
+    {"id": "full-name-uppercase", "detector": "FULL_NAME", "text": "КЛИЕНТ ИВАН ИВАНОВИЧ ПЕТРОВ", "sensitive": ["ИВАН ИВАНОВИЧ ПЕТРОВ"]}
+  ]
+}

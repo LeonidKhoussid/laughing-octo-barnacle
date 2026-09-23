@@ -61,12 +61,12 @@ _COUNTRY_AT_START = re.compile(
     rf"(?i)(?:^|[,;:]\s*)({'|'.join(_COUNTRY_NAMES)})(?=\s*[,;]|\s*$)"
 )
 # Postcode: 6 digits after an address context.
-_POSTCODE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+_POSTCODE = re.compile(r"(?<!\w)(\d{6})(?!\w)")
 
 
 class AddressDetector(Detector):
     detector_id = "address"
-    detector_version = "1.1.0"
+    detector_version = "1.3.0"
 
     def detect(self, text: str) -> list[Detection]:
         out: list[Detection] = []
@@ -123,6 +123,10 @@ class AddressDetector(Detector):
 
         if not sensitive:
             return []
+
+        # Emit components in source order. This keeps evidence and sensitive
+        # spans deterministic for one address containing every component.
+        sensitive.sort(key=lambda span: (span.start, span.end))
 
         # Evidence is the whole address region (from first to last component).
         first = min(s.start for s in sensitive)

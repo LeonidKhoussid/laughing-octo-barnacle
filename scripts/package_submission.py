@@ -29,15 +29,15 @@ ALLOWLIST: list[str] = [
     ".gitignore",
     "rules.md",
     "memory.md",
-    "AGENTS.md",
     "kilo.jsonc",
     "master_prompt.md",
     "Dockerfile",
+    ".dockerignore",
     "compose.yaml",
 ]
 
-# Excluded path fragments (caches, venv, secrets, artifacts, weights, datasets).
-EXCLUDE_FRAGMENTS: tuple[str, ...] = (
+# Excluded path components (caches, venv, secrets, artifacts, weights, datasets).
+EXCLUDE_COMPONENTS: frozenset[str] = frozenset({
     ".venv",
     "venv",
     "env",
@@ -57,64 +57,36 @@ EXCLUDE_FRAGMENTS: tuple[str, ...] = (
     "obj",
     "coverage",
     "artifacts",
-    ".env",
+    "secrets",
+    "secret",
+    "credentials",
     ".egg-info",
-    "*.pyc",
-    "*.pyo",
-    "*.log",
     ".DS_Store",
-    "*.tsbuildinfo",
     "vite.config.js",
     "vite.config.d.ts",
     "model",
     "models",
     "weights",
-    ".bin",
-    ".pt",
-    ".pth",
-    ".onnx",
-    ".h5",
-    ".joblib",
-    ".pkl",
-    ".parquet",
-    ".csv",
-    ".jsonl",
-    ".ndjson",
-    ".dump",
-    ".rdb",
-    ".aof",
-    ".zip",
-    ".tar",
-    ".gz",
-    ".bz2",
-    ".xz",
-    ".7z",
-    ".mp4",
-    ".mp3",
-    ".mov",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
+})
+
+EXCLUDE_SUFFIXES: tuple[str, ...] = (
+    ".pyc", ".pyo", ".log", ".tsbuildinfo", ".bin", ".pt", ".pth", ".onnx",
+    ".h5", ".joblib", ".pkl", ".parquet", ".csv", ".jsonl", ".ndjson", ".dump",
+    ".rdb", ".aof", ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".mp4", ".mp3",
+    ".mov", ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".key", ".pem", ".crt", ".cer", ".p12", ".pfx",
 )
 
 
 def _excluded(rel: str) -> bool:
-    parts = rel.split(os.sep)
-    name = parts[-1]
-    for frag in EXCLUDE_FRAGMENTS:
-        if frag in parts:
-            return True
-        if frag.startswith("*") and name.endswith(frag[1:]):
-            return True
-        if frag == name:
-            return True
-    return False
+    path = Path(rel)
+    name = path.name
+    return (
+        any(part in EXCLUDE_COMPONENTS for part in path.parts)
+        or name == ".env"
+        or (name.startswith(".env.") and name != ".env.example")
+        or name.endswith(EXCLUDE_SUFFIXES)
+    )
 
 
 def _collect() -> list[Path]:

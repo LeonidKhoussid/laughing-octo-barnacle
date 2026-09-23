@@ -27,6 +27,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from app.core.engine import Engine
+from app.observability.telemetry import stage
 from app.policies.schema import ConsumerPolicy
 from app.vault.base import Vault, VaultCapacityError, VaultIntegrityError, VaultUnavailableError
 from app.vault.fingerprint import Fingerprinter
@@ -106,6 +107,7 @@ class Lifecycle:
         policy: ConsumerPolicy,
     ) -> MaskOutcome:
         """Mask `original` under (namespace, payload_id) with replay semantics."""
+        stage("vault")
         fp = self._fp.fingerprint(original)
         owner = uuid.uuid4().hex
         now = time.time()
@@ -170,6 +172,7 @@ class Lifecycle:
         policy: ConsumerPolicy,
     ) -> str:
         """Restore the exact original from masked text under (namespace, payload_id)."""
+        stage("vault")
         try:
             record = self._vault.get(namespace, payload_id)
         except VaultUnavailableError:
@@ -201,6 +204,7 @@ class Lifecycle:
         with its original value. It is NOT fuzzy, recursive, or LLM-based (R25).
         Unknown/damaged tokens are left untouched.
         """
+        stage("vault")
         try:
             record = self._vault.get(namespace, payload_id)
         except VaultUnavailableError:
@@ -228,6 +232,7 @@ class Lifecycle:
         masked_text, this is a demask (restore). If it matches the original
         fingerprint, it is a mask replay. Otherwise it is a new mask.
         """
+        stage("vault")
         try:
             record = self._vault.get(namespace, payload_id)
         except VaultUnavailableError:

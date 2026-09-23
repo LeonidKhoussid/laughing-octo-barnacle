@@ -104,7 +104,7 @@ _PATRONYMIC_FORMS = _forms(_PATRONYMICS)
 _SURNAME_FORMS = _forms(_SURNAMES)
 _PATRONYMIC = re.compile(r"[а-яё-]+(?:ович|евич|ич)(?:а|у|ем|ом|е)?|[а-яё-]+(?:овн|евн|ичн)(?:а|ы|е|у|ой)")
 _SURNAME = re.compile(
-    r"[а-яё-]{2,}(?:(?:ов|ев|ёв|ин|ын)(?:а|у|ом|е|ой|ы|у)?|"
+    r"[а-яё-]{2,}(?:(?:ов|ев|ёв|ин|ын)(?:а|у|ом|е|ой|ы|ым|им)?|"
     r"(?:ск|цк)(?:ий|ая|ого|ому|им|ом|ой|ую)|енко|ко|ук|юк|ич|ых|их)"
 )
 
@@ -139,6 +139,7 @@ _BRIDGE_WORDS = {"от", "это", "является", "известный", "и
                  "великий", "великого", "великим", "русский", "русского", "русским",
                  "российский", "российского", "советский", "советского", "наш", "нашего"}
 _PRIVATE_FIELD = re.compile(r"(?i)^\s*[,:(—–-]?\s*(?:телефон|мобильный|паспорт|карта|email|e-mail|инн)\b")
+_PRIVATE_EMAIL_AFTER = re.compile(r"^\s*[:(—–-]?\s*[A-Za-z0-9._%+-]+@")
 _LITERARY_CONTEXT = re.compile(
     r"(?i)\b(?:роман(?:а|у|ом|е)?|поэм[аыуе]|стих(?:и|ов|ами|ах)?|"
     r"стихотворени(?:е|я|й|ю|ем|ях)|произведени(?:е|я|й|ю|ем|ях)|"
@@ -149,6 +150,7 @@ _PRIVATE_ACTION = re.compile(
     r"(?i)^\s*(?:сообщил[аи]?|прислал[аи]?|предоставил[аи]?|предъявил[аи]?|"
     r"указал[аи]?|оставил[аи]?)\s+(?:сво[йюи]\s+)?(?:паспорт|телефон|карт[уы]|инн|заявление|данные|номер\s+(?:телефона|карты|паспорта))\b|"
     r"^\s*(?:обратил(?:ся|ась)|приш[её]л|пришла)\s+в\s+банк\b|"
+    r"^\s*(?:вчера\s+)?обсуждал\w*\b|"
     r"^\s*(?:просит|попросил[аи]?)\s+(?:закрыть|открыть|заблокировать)\s+(?:сч[её]т|карт[уы])\b"
 )
 _PRIVATE_BEFORE = re.compile(r"(?i)\b(?:в\s+банк\s+обратил(?:ся|ась)|обратил(?:ся|ась)\s+в\s+банк)\s*$")
@@ -202,6 +204,7 @@ def _private_context(text: str, start: int, end: int) -> bool:
     return (_attached(_PERSON_CONTEXT, text, start, end)
             or bool(_PRIVATE_BEFORE.search(text[max(0, start - 90):start]))
             or bool(_PRIVATE_FIELD.match(text[end:end + 50]))
+            or bool(_PRIVATE_EMAIL_AFTER.match(text[end:end + 100]))
             or bool(_PRIVATE_ACTION.match(text[end:end + 90])))
 
 
@@ -244,8 +247,16 @@ def _roles(word: str) -> set[str]:
     return roles
 
 
-def _plausible(words: list[str], personal: bool, fio: bool) -> bool:
-    roles = [_roles(word) for word in words]
+def _plausible(
+    words: list[str], personal: bool, fio: bool,
+    roles: list[frozenset[str]] | None = None,
+) -> bool:
+    # A request-local cache may supply immutable role sets. Unknown-name
+    # handling below is deliberately applied to copies only.
+    if roles is None:
+        roles = [_roles(word) for word in words]
+    elif personal or fio:
+        roles = [set(role) for role in roles]
     # Unknown capitalized tokens may fill ONE missing role in an otherwise
     # grammatical name next to an explicit client/ФИО label (e.g. Александер).
     if personal or fio:
@@ -279,11 +290,23 @@ def _plausible(words: list[str], personal: bool, fio: bool) -> bool:
 
 class FullNameDetector(Detector):
     detector_id = "full_name"
-    detector_version = "1.3.0"
+    detector_version = "1.4.0"
 
     def detect(self, text: str) -> list[Detection]:
         out: list[Detection] = []
         tokens = list(_NAME_TOKEN.finditer(text))
+        role_cache: dict[str, frozenset[str]] = {}
+
+        def roles_for(words: list[str]) -> list[frozenset[str]]:
+            result = []
+            for word in words:
+                role = role_cache.get(word)
+                if role is None:
+                    role = frozenset(_roles(word))
+                    role_cache[word] = role
+                result.append(role)
+            return result
+
         i = 0
         while i < len(tokens):
             matched = False
@@ -295,14 +318,15 @@ class FullNameDetector(Detector):
                 start, end = run[0].start(), run[-1].end()
                 if any(_PERSON_CONTEXT.fullmatch(w) or _FIO_CONTEXT.fullmatch(w) or _PUBLIC_PERSON_CONTEXT.fullmatch(w) for w in words):
                     continue
-                if not _plausible(words, True, True):
+                roles = roles_for(words)
+                if not _plausible(words, True, True, roles):
                     continue
                 personal = _private_context(text, start, end)
                 fio = _attached(_FIO_CONTEXT, text, start, end)
                 public = _public_reference(text, start, end, words)
                 # A directly attached person role or name field supplies the
                 # structure for unfamiliar names; capitalization alone does not.
-                if not _plausible(words, personal or public, fio or personal):
+                if not _plausible(words, personal or public, fio or personal, roles):
                     continue
                 # Consume the whole candidate even when public: don't rediscover
                 # its patronymic/surname as an unrelated private two-word name.
@@ -325,7 +349,7 @@ class FullNameDetector(Detector):
         # Explicit separate fields contain a single value, not a 2–3 word name.
         for match in re.finditer(r"(?i)\b(?:фамилия|имя|отчество)\s*:\s*([а-яё]+(?:[-‑–][а-яё]+)*)", text):
             start, end = match.span(1)
-            if not (_roles(match.group(1)) or match.group(1)[0].isupper()):
+            if not (roles_for([match.group(1)])[0] or match.group(1)[0].isupper()):
                 continue
             if any(d.sensitive_spans[0].start <= start < d.sensitive_spans[0].end for d in out):
                 continue

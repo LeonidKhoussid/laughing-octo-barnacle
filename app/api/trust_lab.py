@@ -17,6 +17,7 @@ import time
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.api.errors import forbidden, overloaded, processing_error, retryable, too_large, unauthorized
 from app.core.engine import Engine
@@ -173,7 +174,7 @@ def build_trust_lab_router(
     )
 
     @router.post("/action-a")
-    def action_a(req: ActionARequest, x_api_key: str | None = Header(default=None)):
+    async def action_a(req: ActionARequest, x_api_key: str | None = Header(default=None)):
         # Protected consumers require authentication (section 17.4: helper APIs
         # must respect consumer access). analytics_demo (unmask=false) must not
         # return a newly submitted original.
@@ -184,13 +185,11 @@ def build_trust_lab_router(
             raise unauthorized()
         try:
             limits.check_body(len(req.text.encode("utf-8")))
-            limits.acquire()
         except BodyTooLargeError:
             raise too_large()
         except BackpressureError:
             raise overloaded()
-        try:
-            started_at = time.monotonic()
+        def execute():
             # Gold derived from this input is not independent ground truth.
             labeled = (
                 _labeled_from_text(engine, req.text, req.consumer, policy_store)
@@ -203,18 +202,18 @@ def build_trust_lab_router(
                 seed=req.seed,
                 run_variations=req.run_variations,
             )
-            limits.check_deadline(started_at)
             return _action_a_dict(result)
+
+        try:
+            return await limits.run(execute, run_sync=run_in_threadpool)
         except HTTPException:
             raise
-        except DeadlineExceededError:
+        except (BackpressureError, DeadlineExceededError):
             raise overloaded()
         except ModelUnavailable:
             raise retryable()
         except Exception:
             raise processing_error()
-        finally:
-            limits.release()
 
     @router.post("/action-b")
     def action_b(req: ActionBRequest):

@@ -1,5 +1,130 @@
 # Current performance verification
 
+## Final source-ZIP verification
+
+After the postcode fix and admission limit of eight, the source-only ZIP built
+successfully into image
+`sha256:d20175faae43781ec5937d2838d4c0d4a726c7f6b1b51de00b68e365522f4779`.
+The final container still used Linux/arm64, four-CPU quota, 6 GiB memory,
+one worker, MemoryVault, both original models and the unchanged privacy thresholds.
+Fresh IDs/text and ready restorations were used; client concurrency was eight.
+
+| Final workload | Duration | Correct / attempted | Correct RPS inside window | Overall HTTP p95 | Mask HTTP p95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Required synthetic fields, all 17 categories | 20 s | 9587 / 9587 | 478.95 | 31.66 ms | 34.0 ms |
+| Required fields + public references + mixed records | 30 s | 407 / 407 | 13.30 | 2833.56 ms | 2932.1 ms |
+
+All counters reconcile. Neither run had correctness, HTTP, malformed-response,
+timeout or transport failures. Each finished eight additional requests during
+drain, excluded from the RPS column, and left nine successful masks without a
+sampled restore. This verifies the corrected synthetic cases under closed load;
+it does **not** show that the earlier fixed-rate overload is resolved, reproduce
+the judge's ramp/retries, or establish 1000 successful RPS or representative
+95% quality. The required-field and context-heavy rates are different workloads,
+not a before/after speedup.
+
+Evidence: `artifacts/docker-source-zip-final-closed20s-required.json`,
+`artifacts/docker-source-zip-final-closed30s-mixed.json`, and
+`artifacts/docker-source-zip-final-metadata.json`.
+One additional 100,082-token HTTP pair completed with mask 200 in **8.3486 s**,
+restore 200 in **0.5631 s**, correct concealment and exact restoration. No load
+ran concurrently. That is one functional observation within the tester's
+10-second timeout, not the one-second target or a percentile:
+`artifacts/requirements-container-100k.json`.
+
+## Requirements recheck: container baseline, 23 September 2026
+
+The initial requirements-check image was built from the application and production React sources,
+including the new request deadlines, stage telemetry, field regressions and
+body-size guard, before the postcode/admission follow-up documented below.
+The developer machine is Apple Silicon; the Docker workload
+used Linux/arm64 with a **four-CPU quota and a 6 GiB memory limit** inside an
+8 GiB Docker VM. This is not a measurement on the user's 4 × 3.3 GHz, 8 GB server.
+The generator ran on the same physical machine, outside the container.
+
+The 20-second closed run used eight concurrent HTTP requests, fresh input and
+IDs, all 17 required types (`required`), public references and mixed records,
+and a ready restoration on alternate slots. It returned **281/281 correct
+responses**, with 273 completions within the window: **13.65 successful RPS**.
+Overall HTTP p95 was **2719.22 ms**, p99 **2890.86 ms**. Eight responses completed
+during drain; nine masks remained awaiting an unsampled restore. No HTTP errors,
+malformed results or incorrect returned masks/restorations occurred. Evidence:
+`artifacts/docker-requirements-check-closed20s.json` and its metadata sidecar.
+This result fails the throughput target and exceeds the one-second latency
+guideline; passing functional tests does not change that finding.
+
+Two bounded configuration experiments used the same workload and image:
+
+| NER configuration | Successful RPS in window | HTTP 200 / attempts | Mask p95 |
+| --- | ---: | ---: | ---: |
+| 4 intra-op threads, normal spinning (current) | 13.65 | 281 / 281 | 2782.8 ms |
+| 1 intra-op thread | 13.65 | 281 / 281 | 2923.5 ms |
+| 4 threads, NER-only spinning disabled (temporary file mount) | 14.50 | 298 / 298 | 2866.4 ms |
+
+The one-thread setting brought no throughput gain. The no-spin result is one
+small throughput difference with no better mask p95; it has **not** been adopted.
+These tests do not establish thread oversubscription as the principal cause.
+The mask/context path remains expensive; restoration and HTTP dispatch are much
+cheaper. Neither experiment bypassed the models, cached raw text between requests,
+changed thresholds, or modified the active model weights. Evidence:
+`artifacts/docker-requirements-ner1-closed20s.json` and
+`artifacts/docker-requirements-ner4-nospin-closed20s.json`.
+For the meaning of the tested thread controls, see the
+[ONNX Runtime threading documentation](https://onnxruntime.ai/docs/performance/tune-performance/threading.html).
+
+The large-document fixture is now measured by the pinned NER tokenizer:
+**100,082 tokens**, 659,119 characters and 1,223,987 UTF-8 bytes. The previous
+chars/4 fixture actually contained 60,897 tokens with this tokenizer. Both
+new end-to-end tests pass with beginning/middle/end PII and exact restoration.
+Four NER threads reduced the isolated NER measurement from 6.778 to 2.427 seconds
+on the Mac, with span parity at batch size eight; alternative batch sizes were
+rejected because their output spans changed. Request-local name-role memoization
+reduced its isolated detector measurement from 1.159 to 0.912 seconds. These
+are local component timings, **not** HTTP throughput or one-second-SLA evidence.
+See `artifacts/ner-thread-batch-benchmark-2026-09-23.{json,md}` and
+`artifacts/requirements-detection-person-{baseline,after}.json`.
+
+### Five-minute overload diagnostic and follow-up repair
+
+The initial image (before the postcode boundary fix, admission limit 64) was
+also tested for 300 seconds at a configured 1000 RPS, 200 client connections,
+`required,public,mixed`, with ready restorations and a 10-second client timeout.
+It scheduled 300,000 slots but launched only **25,018 HTTP requests**; 29,531
+slots were late and 245,451 exceeded client capacity. There were **22,661 HTTP
+429 responses, 878 timeouts, 3 transport errors**, and 1476 HTTP 200 responses.
+Of those 200 responses, **29 failed the correctness oracle**. Only 1404 correct
+responses finished within the window (**4.68 successful RPS**); 1447 were correct
+including drain. The container stayed healthy with no OOM events. This is a
+**failed load/correctness run**, not a performance pass. Evidence:
+`artifacts/docker-requirements-open1000-5min.json` and its metadata sidecar.
+
+A 30-second reproduction recorded seven failing ADDRESS masks. Every one also
+failed sequentially: the postcode regex incorrectly treated six digits inside
+an alphanumeric control identifier as a postcode. All six real address values
+were masked, but an extra identifier fragment was masked too. The direct
+substring check used in the first replay diagnosis was invalid because a short
+value such as `8` can occur inside an opaque token; that diagnosis was corrected.
+The generator, expected values and footer remain unchanged. The application now
+uses Unicode-aware identifier boundaries, with Latin/Cyrillic identifier and
+legitimate-postcode regressions. The original five-minute report retains all
+29 failures; the seven-case reproduction does not retrospectively identify
+every one of those 29 responses.
+
+The benchmark now keeps bounded safe examples separately for each failure type,
+so early 429 responses cannot hide later correctness failures. It stores no
+request/response bodies. A separate 30-second admission-limit comparison on the
+old image reduced the limit from 64 to 8: no timeouts were recorded, versus 107
+in the preceding 30-second run at 64, but six transport errors and 3028 HTTP 429
+responses remained. Only 181 correct responses finished within the window
+(6.03 RPS; p95 including drain 5360 ms). Source and workload were not an identical
+paired experiment, so this is a configuration diagnostic, not a precise speedup.
+The new default of **8 in-flight requests** bounds concurrent model work on the
+four-CPU baseline. It does not solve the 1000-RPS requirement. Evidence:
+`artifacts/docker-admission8-open1000-30s.json` and its metadata.
+
+The sections below document earlier source states and narrower workloads; their
+RPS values must not be substituted for the current container measurement above.
+
 Organizer clarification reviewed after these measurements: [chat review](chat-review-2026-09-23.md), messages #666–667, describes ramped load averaging roughly 330 RPS with peaks of 1000, equal mask/restore counts, and up to 200 connections. HTTP 429 is recorded separately and is not considered an invalid-request error by the organizer. The harness's generic `errors` count includes non-200 responses; use `status_counts` to separate 429 from invalid responses. Neither rejected nor unissued requests count as successful throughput. Exact judge traffic remains unspecified; the fixed-rate mask-heavy runs below remain stress diagnostics, not an exact reproduction of that schedule.
 
 **The 1000 RPS target is not demonstrated.** The tables below labelled G3/G5/G8

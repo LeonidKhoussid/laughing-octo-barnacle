@@ -1,57 +1,36 @@
-# Limitations — AlfaGen PII Gateway
+# Current limitations
 
-Real, measured limitations of this solution. These are not a generic template;
-each item reflects an actual constraint of the implemented system.
+Updated 23 September 2026. See `requirements-verification.md` for the complete
+requirement mapping and `benchmark.md` for measured workloads.
 
-## 1. Performance
-
-- **100k-token mask is above the 1 s SLA.** A single 100k-token document is
-  processed functionally (no silent truncation, end-of-document fragment masked,
-  exact round-trip), but the mask latency is ~1.74 s p50 at low rate and ~8 s at
-  high offered rate. The engine is single-pass and not chunked, so a single
-  large document is CPU-bound.
-- **RedisVault is much slower than MemoryVault.** `ensure_capacity()` performs a
-  full Redis `SCAN` over all keys on every mask (O(N) per request). The
-  multiworker path sustains ~108 RPS vs ~957 RPS for MemoryVault (1 worker).
-- **MemoryVault degrades as it accumulates entries.** `_purge_expired()` is O(N)
-  on every operation; throughput drops from ~957 RPS on a fresh server to ~418
-  RPS after many entries accumulate.
-- **Long-text starvation.** Mixing long and short requests degrades short-request
-  latency significantly (short p50 rises from ~3 ms to ~92 ms).
-
-## 2. Detection quality
-
-- **Synthetic fixtures are not proof of real-world 100%.** The per-category
-  metrics (P/R/F1 = 1.000) are measured on a template-generated synthetic corpus
-  (82 examples, seed 20260922). This does **not** prove 100% accuracy on real
-  data and is **not** the organizers' official formula.
-- **FULL_NAME is a heuristic** (dictionary + context), not a full NER; uncommon
-  names or unusual grammar may be missed.
-- **ADDRESS handles a fixed set of component patterns**; complex addresses
-  (buildings, fractions, "8 Марта" streets) are only partially covered.
-- **Historical-person detection for BIRTH_PLACE** relies on a profession-word
-  guard and may not cover all historical contexts.
-- Ambiguous bare values, rare name forms, obfuscations, unknown document types,
-  and distant cross-chunk relations are not exhaustively covered.
-
-## 3. Contract and integration
-
-- **Official contract UNVERIFIED.** Appendix A (the official `POST /process`
-  JSON schema) is missing. The `/process` endpoint uses an assumed project
-  schema marked `UNVERIFIED`. This blocks only confirmation of official adapter
-  compatibility, not the independent core, demo API, detectors, tokenization,
-  Vault, round-trip, or tests.
-- **No full bank integration.** AlfaGen is not integrated; the demo uses an
-  explicitly-marked stub provider. Real bank systems, real data, and an
-  information-security retention policy are required for production.
-- **No compliance certificate.** The system does not certify the absence of any
-  unknown PII and does not promise absolute anonymity (R45, R06).
-
-## 4. Storage
-
-- **Limited TTL and capacity.** Vault entries expire after a configurable TTL
-  (default 3600 s) and are bounded by `max_entries` (100k) and `max_bytes`
-  (1 GB). After expiry/miss the original is not recoverable (R36).
-- **No physical RAM erasure.** The system does not promise physical erasure of
-  Python RAM on TTL; persistence/backups and real storage boundaries are the
-  actual limits (R50).
+- 95% quality on representative independent data or the hidden judge dataset is
+  unproven. Synthetic cases used during fixes are regression evidence only.
+- NER and NLI are active local models. NLI classifies context, not whether a fact
+  is truly public knowledge. An unfamiliar person described as a poet can still
+  be mistaken for a public biography; an unqualified meeting address is ambiguous.
+- Structured types still use rules. Unusual addresses, unknown documents and
+  obfuscation are not exhaustively covered. A generic NER is not trained on all
+  seventeen required PII labels.
+- Sustained successful 1000 RPS and 2000 bonus RPS are not demonstrated. The large
+  context model remains a CPU bottleneck on public/mixed passages. Failed or
+  rejected requests must not be counted as successful throughput.
+- Earlier 100k tests estimated tokens as characters/4 and contained only 60,897
+  active-NER tokens. The corrected fixture contains 100,082 tokens. Its 1-second
+  latency target remains unmet; body limit is now 2 MiB by default.
+- MemoryVault uses an expiry heap rather than scanning every entry, but is still
+  single-process and loses mappings at restart. RedisVault supports shared,
+  encrypted mappings; capacity accounting still scans Redis and must be measured
+  before recommending multiworker for throughput.
+- Metrics are per worker, with explicit rate windows. Incoming-text TPS is an
+  estimate; inference TPS counts actual model input IDs, including overlaps and
+  hypotheses. Multiworker metrics require aggregation outside this prototype.
+- UI policy updates are in-memory and do not persist. For several workers, edit
+  the configuration file and restart all workers together; mutable UI updates
+  return 409 instead of silently diverging.
+- Already-running native inference cannot be force-killed safely. The 9-second
+  response deadline returns overload while retaining that worker's admission slot
+  until completion. Persistent overload is a capacity failure, not a passed SLA.
+- A real external LLM integration and production banking/regulatory controls are
+  not demonstrated. Basic judge UI and `/process` work without external API keys.
+- No model was trained on russian-pii-66k: the proposed dataset lacks explicit
+  public/private labels and declared licensing/provenance in the reviewed card.

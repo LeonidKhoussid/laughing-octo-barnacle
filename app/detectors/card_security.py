@@ -32,7 +32,7 @@ _PIN_RE = re.compile(
 _CARDHOLDER_RE = re.compile(
     r"(?i)\b(держатель\s+карты|держатель|cardholder|имя\s+на\s+карте|имя\s+на\s+карточке)\b"
     r"[ \t:]*"
-    r"([А-ЯЁA-Z][а-яёa-z\-]+(?:\s+[А-ЯЁA-Z][а-яёa-z\-]+){0,3})"
+    r"([А-ЯЁA-Z][а-яёa-z\-]+(?:[^\S\r\n]+[А-ЯЁA-Z][а-яёa-z\-]+){0,3})"
 )
 
 # Words that terminate a cardholder name run (verbs, prepositions, etc.).

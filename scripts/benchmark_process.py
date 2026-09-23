@@ -10,6 +10,7 @@ import argparse
 import asyncio
 from collections import Counter, deque
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -25,6 +26,7 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 TOKEN = r"(?:⟦PII:[A-Z_]+:[A-Za-z0-9_-]+⟧)"
+FAILURE_OUTCOMES = ("http_error", "malformed_response", "correctness_failure", "timeout", "transport_error")
 
 
 @dataclass(frozen=True)
@@ -44,8 +46,19 @@ class Sample:
         return re.fullmatch("".join(parts), result) is not None
 
 
+@lru_cache(maxsize=1)
+def required_cases() -> tuple[dict, ...]:
+    """Frozen synthetic field values; independent of the detector's output."""
+    path = ROOT / "tests/fixtures/requirements_detection_cases.json"
+    return tuple(json.loads(path.read_text(encoding="utf-8"))["cases"])
+
+
 def sample_for(index: int, run_id: str, kinds: tuple[str, ...]) -> Sample:
     kind = kinds[index % len(kinds)]
+    if kind == "required":
+        case = required_cases()[(index // len(kinds)) % len(required_cases())]
+        suffix = f"\nКонтрольная метка: qz{run_id}x{index}."
+        return Sample(case["detector"], case["text"] + suffix, tuple(case["sensitive"]))
     names = ("Иван Иванович Петров", "Анна Сергеевна Смирнова", "Пётр Алексеевич Иванов")
     variant = index // len(kinds)
     name = names[variant % len(names)]
@@ -91,7 +104,7 @@ async def run_benchmark(client: httpx.AsyncClient, *, mode="open", duration=10.0
                         count=None, run_id=None) -> dict:
     if mode not in {"open", "closed"} or duration <= 0 or rps <= 0 or concurrency < 1:
         raise ValueError("Positive duration/rps/concurrency and open/closed mode required")
-    if not kinds or set(kinds) - {"private", "public", "mixed"} or restore_every < 0:
+    if not kinds or set(kinds) - {"private", "public", "mixed", "required"} or restore_every < 0:
         raise ValueError("Invalid workload mix")
     if count is not None and count < 1:
         raise ValueError("Count must be positive")
@@ -104,6 +117,7 @@ async def run_benchmark(client: httpx.AsyncClient, *, mode="open", duration=10.0
     counters = Counter()
     generation_lag = []
     failure_examples = []
+    failure_examples_by_outcome = {outcome: [] for outcome in FAILURE_OUTCOMES}
 
     async def request(slot: int, scheduled: float) -> None:
         # Every fresh mask has a unique ID AND text. A restore reuses only its own ID.
@@ -143,10 +157,17 @@ async def run_benchmark(client: httpx.AsyncClient, *, mode="open", duration=10.0
                                         ended, status, outcome))
         if outcome == "success" and operation == "mask" and restore_every:
             ready.append((sample, payload_id, result))
-        if outcome != "success" and len(failure_examples) < 10:
+        if outcome != "success":
             # Synthetic request IDs only; do not retain payload/response bodies.
-            failure_examples.append({"slot": slot, "operation": operation, "kind": sample.kind,
-                                     "status": status, "outcome": outcome})
+            example = {"slot": slot, "operation": operation, "kind": sample.kind,
+                       "status": status, "outcome": outcome}
+            if outcome == "correctness_failure":
+                example["mismatch"] = "restore_roundtrip" if operation == "restore" else "mask_oracle"
+            if len(failure_examples) < 10:
+                failure_examples.append(example)
+            examples = failure_examples_by_outcome.get(outcome)
+            if examples is not None and len(examples) < 10:
+                examples.append(example)
 
     if mode == "open":
         slots = math.ceil(duration * rps)
@@ -227,6 +248,7 @@ async def run_benchmark(client: httpx.AsyncClient, *, mode="open", duration=10.0
                        "by_operation": {op: latency([o for o in successful if o.operation == op], "started")
                                         for op in ("mask", "restore")}},
         "failure_examples": failure_examples,
+        "failure_examples_by_outcome": failure_examples_by_outcome,
         "accounting_reconciled": True,
         "notes": ["Successful RPS excludes HTTP errors, malformed responses, and incorrect output.",
                   "HTTP duration includes connection-pool wait; scheduled duration also includes dispatch delay.",
@@ -253,7 +275,7 @@ def main() -> None:
     parser.add_argument("--rps", type=float, default=1000)
     parser.add_argument("--concurrency", type=int, default=64)
     parser.add_argument("--max-lateness-ms", type=float, default=50)
-    parser.add_argument("--mix", default="private,public,mixed", help="Comma-separated kinds; repetitions give weights")
+    parser.add_argument("--mix", default="private,public,mixed", help="Comma-separated private,public,mixed,required (all 17 types); repetitions give weights")
     parser.add_argument("--restore-every", type=int, default=0, help="Offer a ready restoration every N mask slots; 0 disables")
     parser.add_argument("--count", type=int)
     parser.add_argument("--timeout", type=float, default=10)

@@ -100,7 +100,7 @@ class TestCanaryNoLeak:
 
     def test_canary_not_in_traceback(self, client):
         # A body that is too large returns a safe 413 without reflecting input.
-        big = CANARY + "x" * 2000000
+        big = CANARY + "x" * client.app.state.limits.max_body_bytes
         r = client.post(
             "/demo/mask",
             json={"text": big, "consumer": "support_demo"},
@@ -149,7 +149,7 @@ class TestValidationNoReflection:
 
 class TestLimits:
     def test_body_too_large_returns_413(self, client):
-        big = "a" * (2 * 1024 * 1024)
+        big = "a" * (client.app.state.limits.max_body_bytes + 1)
         r = client.post(
             "/demo/mask",
             json={"text": big, "consumer": "support_demo"},
@@ -188,3 +188,31 @@ class TestLimits:
                 ), f"invalid Retry-After: {ra!r}"
         finally:
             limits.acquire = original_acquire
+
+
+def test_invalid_processing_body_counted_once_without_reflection(client):
+    metrics = client.app.state.metrics
+    key = "pii_requests_total/operation=process/status=error"
+    before = metrics.snapshot()["counters"].get(key, 0)
+    response = client.post("/process", json={"payload": {"private": PII_CANARY}, "payload_id": "invalid"})
+    assert response.status_code == 422
+    assert PII_CANARY not in response.text
+    assert metrics.snapshot()["counters"][key] == before + 1
+
+
+def test_invalid_config_consumer_does_not_reflect_value(client, monkeypatch):
+    monkeypatch.setenv("PII_CONFIG_UPDATE_KEY", "test-admin")
+    response = client.post("/config/update", json={"consumer": PII_CANARY, "updates": {}, "admin_key": "test-admin"})
+    assert response.status_code == 422
+    assert PII_CANARY not in response.text
+
+
+def test_raw_ignored_json_field_is_bounded_before_parsing(client):
+    metrics = client.app.state.metrics
+    key = "pii_requests_total/operation=process/status=error"
+    before = metrics.snapshot()["counters"].get(key, 0)
+    size = client.app.state.limits.max_body_bytes * 6 + 4097
+    response = client.post("/process", json={"payload": "safe", "payload_id": "oversize-extra", "padding": "x" * size})
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "too_large"
+    assert metrics.snapshot()["counters"][key] == before + 1

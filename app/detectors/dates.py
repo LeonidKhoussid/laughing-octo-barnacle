@@ -15,7 +15,8 @@ _BIRTH_CONTEXT = re.compile(
 
 # Numeric date: DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY, optionally with context.
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})\b")
-# ISO date: YYYY-MM-DD (year first).
+# Year-first date: YYYY-MM-DD, plus an unambiguous YYYY-DD-MM form where the
+# middle field is greater than 12.
 _ISO_DATE = re.compile(r"\b(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})\b")
 
 # Words date: "12 апреля 1990" or "12 апреля 1990 года". The "года" suffix is
@@ -95,8 +96,12 @@ def _parse_date_match(m) -> tuple[int, int, int] | None:
             return d2, d1, year
         return None
     if m.re is _ISO_DATE:
-        # YYYY-MM-DD (year first).
-        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        # YYYY-MM-DD, or unambiguous YYYY-DD-MM when the middle field cannot
+        # be a month. Ambiguous year-first forms retain the conventional order.
+        year, middle, last = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if middle > 12 and 1 <= last <= 12:
+            return middle, last, year
+        month, day = middle, last
         return day, month, year
     if m.re is _WORDS_DATE:
         day, month_word, year = int(m.group(1)), m.group(2), int(m.group(3))
