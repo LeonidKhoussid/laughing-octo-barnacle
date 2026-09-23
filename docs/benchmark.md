@@ -7,6 +7,122 @@ capacity or latency claim. Historical clean-install/container results also do
 not verify the current package. Current model quality and sequential checks
 are described in [semantic-check.md](semantic-check.md).
 
+## Measured optimization results — 2026-09-23
+
+Paired HTTP tests used Apple M1 Pro (8 CPU cores), 16 GiB RAM, macOS 15.5
+arm64, Python 3.14.6, one Uvicorn worker, MemoryVault, and one ONNX inference
+thread. The load generator ran on the same machine. The semantic detector was
+enabled throughout: RuBERT NER plus the unchanged **FP32 mDeBERTa** context model.
+Server in-flight capacity was 64. Source/config hashes and measured settings are
+recorded in [performance-server-after.json](../artifacts/performance-server-after.json);
+the server was restarted after source capture. The older baseline reports have
+`metadata.server.verified: false` and therefore do not independently attest
+the baseline process identity; they were collected before the source restart
+in the same local comparison.
+
+These are short developer-machine comparisons, not a sustained acceptance test
+or a capacity claim for an x86 VPS. Fresh IDs and unique synthetic text prevent
+replay from being counted as fresh masking. The private workload contains a
+client name, phone and email (roughly 140 characters). The mixed workload adds
+a public scientific/literary sentence (roughly 207 characters).
+
+### Closed load: 10 seconds, 8 concurrent requests, masking only
+
+RPS below counts correct responses **completed inside the 10-second window**.
+Each run also completed 8 final requests during drain; these are excluded from
+that RPS. p95 includes every successful request's HTTP duration, including those
+finishing during drain. No HTTP errors or correctness failures occurred in
+these four runs.
+
+| Workload | Before successful RPS | After successful RPS | Before p95 | After p95 | Total correct requests before / after |
+|---|---:|---:|---:|---:|---:|
+| Private client details | 502.4 | 649.2 | 24.12 ms | 17.70 ms | 5032 / 6500 |
+| Public context plus private details | 44.2 | 80.5 | 418.43 ms | 192.12 ms | 450 / 813 |
+
+Evidence: [before private](../artifacts/performance-before-private.json),
+[after private](../artifacts/performance-after-private.json),
+[before mixed](../artifacts/performance-before-mixed.json),
+[after mixed](../artifacts/performance-after-mixed.json). The observed increases
+are about 29% and 82%, respectively; neither workload reached 1000 RPS.
+
+### Open-load attempt: configured 1000 requests/s, 10 seconds
+
+The generator scheduled 10,000 HTTP slots per run with a client in-flight limit
+of 128. **This did not produce 1000 actual arriving requests/s.** The same-host
+generator dropped most slots as late or over its own capacity. The configured
+rate must not be presented as traffic delivered to the server.
+
+| Measurement | Before | After |
+|---|---:|---:|
+| Scheduled request slots | 10000 | 10000 |
+| Generator late drops | 7789 | 9110 |
+| Client capacity drops | 1811 | 0 |
+| HTTP attempts | 400 | 890 |
+| Correct responses, including drain | 400 | 863 |
+| HTTP 429 responses | 0 | 27 |
+| Correct completions within window | 366 | 786 |
+| Correct completions/s within window | 36.6 | 78.6 |
+| Completed HTTP requests during drain | 34 | 101 |
+| Successful HTTP latency p95 | 3912.53 ms | 817.39 ms |
+| Successful latency p95 from scheduled slot | 3963.33 ms | 866.39 ms |
+
+Both reports reconcile all request/drop counters. There were no malformed
+responses or incorrect masks among returned 200 responses. The after-run still
+had **27 real HTTP 429 errors**, and its successful HTTP p99 was **1045.66 ms**.
+This is an overload diagnostic, **not a passed 1000 RPS / one-second SLA test**.
+Evidence: [before open load](../artifacts/performance-before-1000-mixed.json),
+[after open load](../artifacts/performance-after-1000-mixed.json). A separate
+load-generator host and a longer run are required to evaluate actual offered
+load without this co-located scheduling limitation.
+
+### Mask/restoration mix: 20 seconds, 8 concurrent requests
+
+The final mixed run used all three cases (private, public, mixed) and offered a
+ready restoration on alternate slots. Actual operations were **2079 fresh masks
+and 2070 restorations**, totaling **4149 correct responses**, with zero HTTP
+errors and zero correctness failures. Four early restoration slots had no
+completed mask available and therefore generated fresh masks. Nine successful
+masks remained without a sampled restoration; those are not claimed as verified
+round trips.
+
+There were 4141 correct completions inside the window: **207.05 requests/s**,
+with 8 further completions during drain. Overall HTTP p95 was **137.85 ms**;
+mask p95 **152.93 ms**, restore p95 **22.95 ms**. This higher mixed RPS includes
+cheap restores and must not be substituted for fresh-mask capacity. Evidence:
+[performance-after-restoration-mix.json](../artifacts/performance-after-restoration-mix.json).
+
+### What changed without removing semantic protection
+
+- MemoryVault now tracks expiry with a generation-checked heap and maintains
+  capacity counters, instead of scanning all live entries on each operation.
+  Expiry, overwrite, byte accounting and lifecycle behavior remain tested. Heap
+  compaction is amortized; expiry of a large cohort still requires processing
+  that cohort. The isolated [vault microbenchmark](../artifacts/vault-performance.json)
+  is not an HTTP throughput result.
+- Context inference stops testing a span's remaining hypotheses once the
+  existing acceptance condition has succeeded. This preserves the same logical
+  decision rather than weakening thresholds or skipping mandatory NER. Across
+  96 regression cases, output spans were identical in 96/96 comparisons and
+  both versions restored every case exactly. Two passes reduced evaluated NLI
+  pairs from **342 to 156**; NER still ran **192 times** in each version. Evidence:
+  [semantic-short-circuit-comparison.json](../artifacts/semantic-short-circuit-comparison.json).
+  This is regression equivalence on that corpus, not proof for all future text.
+- Metrics retain at most the **8192 most recent observations per histogram**.
+  Counts and means cover the full process lifetime; exposed p50/p95/p99 cover
+  only that recent window (`percentile_scope: most_recent_observations`). The
+  benchmark's percentiles instead use all observations from the individual run.
+- `/process` acquires bounded admission before worker-pool queuing. Cancellation
+  before work starts releases capacity and prevents later execution; cancellation
+  after work starts retains capacity until its worker finishes. This prevents
+  abandoned requests from bypassing admission. Queuing time is included in the
+  deadline, and overload remains an explicit retryable response.
+
+An INT8 mDeBERTa candidate was evaluated separately and **rejected**: its output
+spans differed from FP32 in 44/96 regression cases and introduced additional
+overmasking. The running service retains FP32; no speed number depends on
+accepting that quality regression. Evidence:
+[nli-quantization-comparison.json](../artifacts/nli-quantization-comparison.json).
+
 ## Current HTTP benchmark
 
 Use `scripts/benchmark_process.py` against a separately started server with the

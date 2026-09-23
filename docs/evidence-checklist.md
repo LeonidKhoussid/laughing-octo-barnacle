@@ -5,6 +5,17 @@ evidence: which tests/commands prove each item, and which are BLOCKED/NOT_RUN.
 Statuses: PASSED / FAILED / NOT_RUN / BLOCKED. Nothing is marked done unless it
 was actually verified.
 
+## Current verification — 23.09.2026
+
+The older G8 matrix and commands below describe earlier builds. For the current
+model-enabled service, `artifacts/performance-tests.xml` records **466 passed,
+zero failures/skips**, including disposable real-Redis integration tests.
+The context optimization preserves all 96 regression outcomes; 84 required
+cases pass, while three of twelve diagnostic cases still fail. This is not a
+representative accuracy estimate. See `docs/benchmark.md` for the measured
+HTTP results: **1000 successful RPS is not achieved**. The old source ZIP and
+clean-install claims do not verify the current source tree.
+
 ## C1–C8 evidence matrix (technical rubric, max 30)
 
 | Criterion | Max | Implemented behavior | Judge action | Test/report | Unresolved gap |
@@ -13,7 +24,7 @@ was actually verified.
 | C2 Correct demasking | 3 | Exact round-trip; authorized token substitution in provider output; retries | Mask then unmask; verify exact original | tests/unit/test_roundtrip.py; smoke ROUND_TRIP_OK; /demo/restore-response | — |
 | C3 Context & variations | 4 | Local context (public person, office); case/Unicode/NBSP/dash; date disambiguation; order-id suppression | Send public-person/office trap + writing variations | Independent audit 47/47; tests/unit/test_detectors.py | — |
 | C4 Configuration & extensibility | 4 | Per-consumer settings; config-driven regex detector (new type, no core rewrite); detect_types validation | Register consumer / add detector via config; verify behavior change | tests/unit/test_config_extensibility.py; configs/consumers.yaml; README | — |
-| C5 Performance & SLA | 4 | Measured latency/RPS; 100k functional; honest percentiles | Run load test; inspect report | artifacts/load_report.json; docs/benchmark.md | 100k mask p50 1.74s > 1s SLA; RedisVault O(N) scan |
+| C5 Performance & SLA | 4 | Bounded MemoryVault expiry, context short-circuit, admission before worker queue; current HTTP load measured | Run concurrent benchmark; inspect successful RPS and dropped/rejected requests | artifacts/performance-after-mixed.json; docs/benchmark.md | 1000 successful RPS not achieved; Redis scaling and current 100k SLA unverified |
 | C6 Security, logs, metrics | 3 | Safe logs/metrics; validation errors don't echo PII; egress re-detects; positive transport control | Inspect one request; verify no PII in logs/errors | tests/integration/test_g5_safety.py; test_log_leak.py; Trust Lab Action C | — |
 | C7 Demonstrated extras | 3 | Tokenization; configurable mask styles; CARD+PIN combination | Trigger each extra; verify behavior | tests/integration/test_g6_ui.py; combination_demo | — |
 | C8 Demo & presentation | 3 | Designer UI (sidebar/conversation/apps/journal); judge guide; demo script | Open UI; run mask→chat→restore; change consumer | app/static/; docs/judge-guide.md; docs/demo-script.md | Browser screenshots NOT_RUN (no browser tool) |
@@ -61,4 +72,4 @@ was actually verified.
 4. Clean-run from ZIP in fresh temp dir: venv + `pip install -e ".[dev]"` + `pytest` → **286 passed, exit 0** (fixtures generated on-the-fly; artifacts/ not required); smoke `ROUND_TRIP_OK: True`.
 5. Source ZIP built (`scripts/package_submission.py`): 115 files, sha256 (see artifacts/alfagen_source.zip).
 6. Live server smoke: `/` 200 (designer UI), `/health` alive+ready, mask→unmask `ROUND_TRIP_OK: True`, `/config` returns consumer_info.
-7. Official /process load (60s @ 1000 RPS, accounting fix): 22885 attempts = 22885 successes = 22885 latency observations, 0 errors/429/5xx/timeouts, 0 correctness failures; process latency p50 2.37ms, p99 5.37ms. Old report marked INVALID for throughput claims (double-counting).
+7. Historical pre-BERT sequential /process diagnostic: 22885 attempts = 22885 successes = 22885 latency observations over 60s, with zero recorded errors. The configured 1000 value was a sequential loop ceiling, not independently offered HTTP load; it does not demonstrate 1000 RPS. Its predecessor also had invalid double-counting. Use the current concurrent reports linked above.
