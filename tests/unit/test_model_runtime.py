@@ -8,6 +8,7 @@ import re
 from types import SimpleNamespace
 import subprocess
 import sys
+from threading import BoundedSemaphore
 
 import pytest
 
@@ -55,6 +56,7 @@ class FakeSession:
 
 def fake_runtime():
     instance = runtime.ModelRuntime.__new__(runtime.ModelRuntime)
+    instance._context_slots = BoundedSemaphore(2)
     tokenizers = {name: FakeTokenizer() for name in ("ner", "context")}
     instance._tokenizers = tokenizers
     instance._sessions = {name: FakeSession(tokenizer, nli=name == "context") for name, tokenizer in tokenizers.items()}

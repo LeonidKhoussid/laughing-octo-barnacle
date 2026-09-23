@@ -65,7 +65,8 @@ def request_telemetry(
         _context.reset(token)
 
 
-def stage(name: str, *, detected_counts: dict[str, int] | None = None, result: str | None = None) -> None:
+def stage(name: str, *, detected_counts: dict[str, int] | None = None, result: str | None = None,
+          overload_reason: str | None = None) -> None:
     """Emit one safe stage event when execution is inside a request context."""
     ctx = _context.get()
     if ctx is None or name not in _STAGES:
@@ -80,16 +81,17 @@ def stage(name: str, *, detected_counts: dict[str, int] | None = None, result: s
         stage=name,
         detected_counts=detected_counts,
         result=result,
+        overload_reason=overload_reason,
     )
 
 
-def record_result(result: str) -> None:
+def record_result(result: str, *, overload_reason: str | None = None) -> None:
     """Record a terminal result once; callers may map overloads explicitly."""
     ctx = _context.get()
     if ctx is None or _result.get() is not None:
         return
     _result.set(result)
-    stage("result" if result == "success" else "errors", result=result)
+    stage("result" if result == "success" else "errors", result=result, overload_reason=overload_reason)
 
 
 def record_model_tokens(model: str, count: int) -> None:

@@ -18,6 +18,10 @@ class BodyTooLargeError(Exception):
 class BackpressureError(Exception):
     """Raised when too many requests are in flight."""
 
+    def __init__(self, message: str, *, reason: str = "admission") -> None:
+        super().__init__(message)
+        self.reason = reason
+
 
 class DeadlineExceededError(Exception):
     """Raised when a request exceeds the configured processing deadline."""

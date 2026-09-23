@@ -11,12 +11,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from threading import Lock
+from threading import Lock, BoundedSemaphore
 from typing import Any
 
 import numpy as np
 
 from app.observability.telemetry import record_model_tokens
+from app.security.limits import BackpressureError
 
 
 # Suppress ORT's native telemetry uploader before importing/initializing ORT.
@@ -105,6 +106,9 @@ def _run(session: Any, rows: list[tuple[list[int], list[int]]], pad: int) -> np.
 
 class ModelRuntime:
     def __init__(self, model_dir: str) -> None:
+        # Do not let expensive NLI occupy every request worker. Surplus context
+        # work is explicitly retried, never classified by a weaker fallback.
+        self._context_slots = BoundedSemaphore(min(2, max(1, os.cpu_count() or 1)))
         try:
             import onnxruntime as ort
             from tokenizers import Tokenizer
@@ -223,6 +227,10 @@ class ModelRuntime:
         Scores are model softmax outputs, not calibrated privacy probabilities.
         Input exceeding the model's token limit raises instead of truncating.
         """
+        if not pairs:
+            return []
+        if not self._context_slots.acquire(blocking=False):
+            raise BackpressureError("context inference at capacity", reason="context")
         try:
             result = []
             tokenizer = self._tokenizers["context"]
@@ -239,6 +247,8 @@ class ModelRuntime:
             return result
         except Exception:
             raise ModelUnavailable() from None
+        finally:
+            self._context_slots.release()
 
 
 @lru_cache(maxsize=2)

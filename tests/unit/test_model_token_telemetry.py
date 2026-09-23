@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from threading import BoundedSemaphore
 
 import numpy as np
 import pytest
@@ -44,6 +45,7 @@ class _Session:
 
 def _runtime(ner: _Session, context: _Session):
     instance = runtime.ModelRuntime.__new__(runtime.ModelRuntime)
+    instance._context_slots = BoundedSemaphore(2)
     instance._tokenizers = {"ner": _Tokenizer(), "context": _Tokenizer()}
     instance._sessions = {"ner": ner, "context": context}
     instance._configs = {"ner": {"pad_token_id": 0}, "context": {"pad_token_id": 0}}

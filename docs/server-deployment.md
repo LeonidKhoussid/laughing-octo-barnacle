@@ -2,6 +2,63 @@
 
 Use an updated source ZIP or a copied current project directory for each server update. Do not rely on `git pull` alone because the required changes can be uncommitted locally.
 
+## Existing systemd server
+
+The supplied September 23 server log identifies the running service as
+`alfagen-pii-gateway.service`, launched directly with Uvicorn. Keep that launcher
+when updating this installation; do not start a second Docker service on port 8000.
+
+First commit and push the tested source changes from the development machine.
+On the server, use the existing checkout and virtual environment:
+
+```bash
+systemctl show alfagen-pii-gateway.service -p WorkingDirectory -p ExecStart
+cd /path/to/the/existing/checkout
+git pull --ff-only
+sudo systemctl edit alfagen-pii-gateway.service
+```
+
+In the service override, add:
+
+```ini
+[Service]
+Environment=UVICORN_TIMEOUT_KEEP_ALIVE=30
+```
+
+This lengthens idle HTTP connection retention, not the request processing
+deadline. If `ExecStart` explicitly supplies `--timeout-keep-alive`, that command
+line value takes precedence; update the existing flag to 30 instead. Then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart alfagen-pii-gateway.service
+sudo systemctl status alfagen-pii-gateway.service --no-pager --full
+curl --max-time 5 -fsS http://127.0.0.1:8000/health
+```
+
+Replace the path with the reported `WorkingDirectory`. If health is not ready
+yet, wait for model startup and repeat the health check. This overload repair
+adds no dependency or model download. The keep-alive setting above is recommended
+for systemd; Docker/Compose now default to 30 seconds. Keep
+`PII_MAX_IN_FLIGHT=8` for the measured baseline. The same number of additional
+slots is reserved solely for completed-result replay/restoration; it cannot
+start new model work. Context-model calls are separately bounded to two per
+process (one on a single-CPU host). Model weights and classification thresholds
+are unchanged. These limits improve isolation, not the model's intrinsic speed.
+
+Export complete logs instead of copying a terminal pager that truncates lines:
+
+```bash
+sudo journalctl -u alfagen-pii-gateway.service --since "30 minutes ago" \
+  --utc --no-pager --full -o cat > server-debug.log
+```
+
+New `/process` overload events include an allowlisted `overload_reason`:
+`admission`, `context`, or `deadline`. The corresponding counters are
+`pii_process_overload_total/reason=...`. Request content, payload IDs, tokens,
+and credentials remain excluded. Do not treat a large total request count
+including 429s as successful throughput.
+
 ## Copy source and start the judge endpoint
 
 From the workstation that has the updated source archive, copy it to the server:

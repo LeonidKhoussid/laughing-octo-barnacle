@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import time
 
+import anyio
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -93,6 +95,13 @@ def build_autocheck_router(
         lifecycle = Lifecycle(vault, engine, None, policy_store.policy_version)  # type: ignore[arg-type]
     if limits is None:
         limits = Limits()
+    # Completed mappings need no neural inference. Reserve bounded capacity so
+    # ongoing masking cannot prevent clients from finishing their round trip.
+    replay_limits = Limits(
+        max_body_bytes=limits.max_body_bytes, max_in_flight=limits.max_in_flight,
+        max_processing_seconds=limits.max_processing_seconds,
+    )
+    replay_workers = anyio.CapacityLimiter(limits.max_in_flight)
 
     @router.post("/process")
     async def process(req: ProcessRequest) -> ProcessResponse:
@@ -107,16 +116,28 @@ def build_autocheck_router(
                 if policy is None or not policy.enabled:
                     raise processing_error()
                 limits.check_body(len(req.payload.encode("utf-8")))
-                outcome = await limits.run(
-                    lambda: lifecycle.process(policy.namespace, req.payload_id, req.payload, policy),
-                    run_sync=run_in_threadpool,
-                )
+                try:
+                    outcome = await limits.run(
+                        lambda: lifecycle.process(policy.namespace, req.payload_id, req.payload, policy),
+                        run_sync=run_in_threadpool,
+                    )
+                except BackpressureError as exc:
+                    if exc.reason != "admission":
+                        raise
+                    outcome = await replay_limits.run(
+                        lambda: lifecycle.process_existing(policy.namespace, req.payload_id, req.payload, policy),
+                        run_sync=lambda callback: anyio.to_thread.run_sync(callback, limiter=replay_workers),
+                    )
+                    if outcome is None:
+                        raise exc
                 status = "success"
                 return ProcessResponse(result=outcome.masked_text)
             except (BackpressureError, DeadlineExceededError) as exc:
                 status = "overload"
                 metrics.inc("pii_backpressure_total", reason="process")
-                record_result(status)
+                reason = "deadline" if isinstance(exc, DeadlineExceededError) else exc.reason
+                metrics.inc("pii_process_overload_total", reason=reason)
+                record_result(status, overload_reason=reason)
                 raise _map_limit_error(exc)
             except BodyTooLargeError as exc:
                 raise _map_limit_error(exc)

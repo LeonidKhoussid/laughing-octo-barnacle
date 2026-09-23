@@ -53,6 +53,9 @@ def test_closed_counts_requests_once_and_validates_fresh_restoration():
     assert len(seen) == report["counts"]["attempted"] == report["counts"]["scheduled"] == 8
     assert report["counts"]["successful_total"] == 8
     assert report["workload"]["request_mix"] == {"mask": 4, "restore": 4}
+    assert report["workload"]["successful_case_mix"] == {"private": 8}
+    assert report["workload"]["successful_mask_case_mix"] == {"private": 4}
+    assert report["workload"]["successful_restore_case_mix"] == {"private": 4}
     assert len({item["payload_id"] for item in seen}) == 4
     assert len({seen[i]["payload"] for i in range(0, 8, 2)}) == 4
     assert report["latency_ms"]["all_http"]["count"] == 8
@@ -64,6 +67,8 @@ def test_all_failure_types_count_once_and_not_as_success():
     counts = report["counts"]
     assert len(seen) == counts["attempted"] == 6
     assert counts["successful_total"] == 1
+    assert report["workload"]["successful_mask_case_mix"] == {"private": 1}
+    assert report["workload"]["successful_restore_case_mix"] == {}
     assert counts["errors"] == 5
     assert counts["http_error"] == 2
     assert counts["timeout"] == counts["malformed_response"] == counts["correctness_failure"] == 1

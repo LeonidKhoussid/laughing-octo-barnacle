@@ -37,6 +37,7 @@ _ALLOWED_LABEL_VALUES: dict[str, frozenset[str]] = {
     "reason": frozenset({
         "mask", "unmask", "process", "chat", "policy", "vault", "capacity",
         "timeout", "integrity", "context_missing", "overload",
+        "admission", "context", "deadline",
     }),
     "provider": frozenset({"stub"}),
     "result": frozenset({"success", "error"}),

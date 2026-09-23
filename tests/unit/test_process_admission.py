@@ -26,7 +26,7 @@ def application(process, limits):
     app = FastAPI()
     app.include_router(build_autocheck_router(
         None, None, store, SafeLogger("admission-test"), Metrics(),
-        lifecycle=SimpleNamespace(process=process), limits=limits,
+        lifecycle=SimpleNamespace(process=process, process_existing=lambda *args: None), limits=limits,
     ))
     return app
 

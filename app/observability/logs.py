@@ -18,6 +18,7 @@ _ALLOWED_FIELDS = {
     "detected_counts",
     "degraded",
     "result",
+    "overload_reason",
 }
 
 _ALLOWED_MESSAGES = {
@@ -61,6 +62,8 @@ class SafeLogger:
         for name, allowed in (("operation", _OPERATIONS), ("stage", _STAGES), ("result", _RESULTS)):
             if safe.get(name) not in allowed:
                 safe.pop(name, None)
+        if safe.get("overload_reason") not in {"admission", "context", "deadline"}:
+            safe.pop("overload_reason", None)
         counts = safe.get("detected_counts")
         if isinstance(counts, dict):
             safe["detected_counts"] = {

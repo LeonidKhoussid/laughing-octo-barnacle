@@ -232,6 +232,19 @@ class Lifecycle:
         masked_text, this is a demask (restore). If it matches the original
         fingerprint, it is a mask replay. Otherwise it is a new mask.
         """
+        existing = self.process_existing(namespace, payload_id, text, policy)
+        if existing is not None:
+            return existing
+        return self.mask(namespace, payload_id, text, policy)
+
+    def process_existing(
+        self, namespace: str, payload_id: str, text: str, policy: ConsumerPolicy,
+    ) -> MaskOutcome | None:
+        """Serve only committed records; never start or wait for inference.
+
+        Safe for the reserved replay lane during masking overload. Routing and
+        namespace checks are identical to the ordinary /process path.
+        """
         stage("vault")
         try:
             record = self._vault.get(namespace, payload_id)
@@ -258,7 +271,7 @@ class Lifecycle:
                 )
             # Different text under an existing ID -> conflict.
             raise ConflictError("text does not match the record for this ID")
-        return self.mask(namespace, payload_id, text, policy)
+        return None
 
     # -- record builders ------------------------------------------------------
 

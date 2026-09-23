@@ -1,3 +1,11 @@
+# Latest overload-isolation repair
+
+See [overload-repair.md](overload-repair.md) for the current change and new
+before/after measurements. The repaired four-CPU container reached 67.06 correct
+RPS in a five-minute diagnostic at 330 scheduled RPS, with remaining 429 and
+transport errors. This does not establish 1000 successful RPS. Earlier reports
+below describe their recorded code/configuration, not the current repair.
+
 # Current performance verification
 
 ## Final source-ZIP verification
